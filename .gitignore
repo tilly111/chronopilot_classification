@@ -9,6 +9,7 @@ venv/
 .idea/
 __pycache__/
 tmp_stuff_to_safe/
+classifier/
 
 
 .DS_Store
@@ -16,3 +17,5 @@ requirements.txt
 Dockerfile
 copy_to_cluster.sh
 plot*
+sandbox.py
+/classifier
