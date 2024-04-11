@@ -2,6 +2,9 @@ SCREAM_DATA_PATH = "/Volumes/Data/chronopilot/scream_experiment/"
 SUBJECTS_STUDY_1 = [2, 4, 7, 8, 11, 16, 19, 22, 24, 25, 28, 29, 30, 31, 32, 33, 35, 36, 37, 39, 40, 41, 42, 43, 44, 47]
 SUBJECTS_STUDY_1_over = [2, 11, 19, 22, 24, 25, 28, 30, 31, 32, 36, 41, 42, 43, 44, 47]
 SUBJECTS_STUDY_1_under = [4, 7, 8, 16, 29, 33, 35, 37, 39, 40]
+SUBJECTS_STUDY_1_only3 = [2, 4, 8, 16, 19, 22, 24, 25, 28, 29, 30, 32, 33, 35, 39, 40, 42, 44, 47]
+SUBJECTS_STUDY_1_test = [ 4, 7, 8, 11, 19, 24, 25, 28, 29, 30, 33, 35, 39, 40, 41, 42, 44, 47]
+
 SUBJECTS_STUDY_2 = [1, 2, 3, 4, 5, 6, 7, 9, 11, 12, 13, 16, 18, 23, 25, 26, 27, 29, 31, 32, 33, 41, 42, 45, 46, 47]
 SUBJECTS_STUDY_2_new = [1, 2, 3, 4, 9, 11, 12, 13, 16, 18, 23, 25, 26, 27, 29, 31, 32, 33, 41, 42, 47]
 GROUP_5 = [18, 25, 27]
@@ -55,3 +58,8 @@ ALL_EDA_FEATURES = ["SCR_Peaks_N",
                     "EDA_SympatheticN",
                     "EDA_Autocorrelation"]
 ALL_TMP_FEATURES = ["mean_tmp_dif", "mean_th", "mean_t1", "gradient", "psd_power"]
+
+# llncs textwidth 347.12354pt
+# pt to inches = 1/72
+LLNCS_FULL_WIDTH = 347.12354 * 1/72
+LLNCS_HALF_WIDTH = 347.12354 * 1/72 * 1/2

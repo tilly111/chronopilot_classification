@@ -18,4 +18,6 @@ Dockerfile
 copy_to_cluster.sh
 plot*
 sandbox.py
+dl_pipeline.py
+ae_pipeline.py
 /classifier
