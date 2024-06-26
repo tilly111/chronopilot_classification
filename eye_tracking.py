@@ -52,10 +52,8 @@ def fit_classifer(x_train, x_test, y_train, y_test):
     return accuracy_score(y_test, y_pred), confusion_matrix(y_test, y_pred), pl_interpretable
 
 if __name__ == '__main__':
-    matplotlib.use('QtAgg')
-    ## select hyperparameters
+    matplotlib.use('TkAgg')
     num_splits = 500
-    roc_repeats = 500
     n_classes = 2
 
     # X, y = load_eye_tracking_data(number_of_classes=n_classes, load_preprocessed=False, include_meta_label=True)
