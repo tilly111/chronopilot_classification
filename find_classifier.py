@@ -41,16 +41,16 @@ if __name__ == "__main__":
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
-    naml = naiveautoml.NaiveAutoML(max_hpo_iterations=20, show_progress=True, scoring="accuracy")
+    naml = naiveautoml.NaiveAutoML(max_hpo_iterations=100, show_progress=True, scoring="accuracy")
 
-    n_classes = 3
+    n_classes = 2
     X, y = load_eye_tracking_data(number_of_classes=n_classes, load_preprocessed=True)
 
     # preselecting the best subset
-    X = X[['sub_max_speed_fix', 'sub_mean_dispersion_fix', 'sub_mean_duration_fix', 'sub_mean_speed',
-           'sub_min_dispersion_fix', 'sub_min_speed_fix', 'sub_number_clusters_fix']]
+    #X = X[['sub_max_speed_fix', 'sub_mean_dispersion_fix', 'sub_mean_duration_fix', 'sub_mean_speed',
+    #       'sub_min_dispersion_fix', 'sub_min_speed_fix', 'sub_number_clusters_fix']]
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
     y = y.to_numpy().ravel()
 
     naml.fit(X, y)
@@ -60,5 +60,5 @@ if __name__ == "__main__":
     print("---------------------------------")
     print(naml.history)
 
-    naml.history.to_csv("results/autoML_classifiers/naml_history_eye_tracking_3_classes.csv")
+    naml.history.to_csv(f"results/autoML_classifiers/naml_history_eye_tracking_{n_classes}_classes.csv")
     plot_history(naml)

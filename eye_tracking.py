@@ -1,31 +1,14 @@
 import os
 
-import constants
-import platform
-import pandas as pd
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 
 import numpy as np
-import torch as t
 import matplotlib
 import matplotlib.pyplot as plt
-from itertools import compress, combinations
-from sklearn.decomposition import PCA
-
-from sympy.combinatorics.subsets import ksubsets
 
 from sklearn.feature_selection import RFECV, SequentialFeatureSelector
 from sklearn.metrics import confusion_matrix, f1_score, accuracy_score, ConfusionMatrixDisplay
-from sklearn.svm import SVC
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.linear_model import LogisticRegression
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier
-from sklearn.model_selection import train_test_split
-from xgboost import XGBClassifier
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 
 from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
@@ -33,6 +16,7 @@ from sklearn.model_selection import LearningCurveDisplay
 
 from utils.learner_pipeline import get_pipeline_for_features
 
+from sklearn.feature_selection import VarianceThreshold
 from plotting_scripts.roc_curve_plotting import get_mccv_ROC_display
 
 from imblearn.over_sampling import BorderlineSMOTE
@@ -51,11 +35,14 @@ from plotting_scripts.plot_physio import plot_physio3D, plot_physio2D
 # X.drop(columns=["participant", "time", "robot"], inplace=True)
 
 
-def fit_classifer(x_train, x_test, y_train, y_test, number_trees=1000):
-    learner = ExtraTreesClassifier(n_estimators=number_trees)
-    # learner = SVC(kernel="rbf", C=1.0, probability=True)
+def fit_classifer(x_train, x_test, y_train, y_test):
+    # todo adjust accordingly to the number of classes
+    # for two classes: ExtraTreesClassifier: bootstrap=True, max_features=0.4908846305986305, n_estimators=512, warm_start=True
+    #  increase parameters because 512 is upper limit of autoML and more trees = better ;)
+    learner = ExtraTreesClassifier(bootstrap=True, max_features=0.4908846305986305, n_estimators=1024, warm_start=True)
+    data_pre_processor = VarianceThreshold()
 
-    pl_interpretable = get_pipeline_for_features(learner, x_train, y_train, list(x_train.columns))
+    pl_interpretable = get_pipeline_for_features(learner, data_pre_processor)  # x_train, y_train, list(x_train.columns)
 
     pl_interpretable.fit(x_train, y_train.values.ravel())
 
@@ -69,7 +56,6 @@ if __name__ == '__main__':
     ## select hyperparameters
     num_splits = 500
     roc_repeats = 500
-    number_trees = 1000
     n_classes = 2
 
     # X, y = load_eye_tracking_data(number_of_classes=n_classes, load_preprocessed=False, include_meta_label=True)
