@@ -2,9 +2,16 @@ import platform
 import matplotlib
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
+from sklearn.linear_model import LogisticRegression
+from itertools import cycle
 
 from utils.feature_loader import load_scream_data
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import LabelBinarizer
+from utils.feature_loader import load_eye_tracking_data
+from sklearn.model_selection import train_test_split
+
+from sklearn.metrics import RocCurveDisplay
 
 from utils.learner_pipeline import get_pipeline_for_features
 from plotting_scripts.roc_curve_plotting import get_mccv_ROC_display
@@ -22,25 +29,54 @@ elif platform.system() == "Windows":
     pass
 
 
-## load training/validation data: only for testing "Exp47_Ivy5"
-study = "1"  # "1" or "2"
-block_names = ["exp_TU", "exp_T", "exp_MA", "exp_PU"]  # "exp_T", "exp_MA", "exp_TU", "exp_PU", "exp_S"
-background_block_name = "exp_S"  # "baseline"
+## load training/validation
+X, y = load_eye_tracking_data(number_of_classes=3, load_preprocessed=True)
+print(y.shape)
+print(X.shape)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
 
 
-X, y = load_scream_data(study, block_names, background_block_name, use_neurokit=False)
-X.drop(columns=["subject"], inplace=True)
-y.drop(columns=["subject"], inplace=True)
+# classifier = LogisticRegression()
+classifier = ExtraTreesClassifier(n_estimators=1000)
+y_score = classifier.fit(X_train, y_train).predict_proba(X_test)
 
-## select hyperparameters
-roc_repeats = 500
-number_trees = 1000
+label_binarizer = LabelBinarizer().fit(y_train)
+y_onehot_test = label_binarizer.transform(y_test)
+print(y_onehot_test.shape)  # (n_samples, n_classes)
+
+print(label_binarizer.classes_)
 
 
-learner = ExtraTreesClassifier(n_estimators=number_trees)
-pl_interpretable = get_pipeline_for_features(learner, X, y, list(X.columns))
+class_id = 2  # fast
+class_of_interest = "fast"
 
-fig, axs = plt.subplots(1, 1, figsize=(7, 7))
-get_mccv_ROC_display(pl_interpretable, X, y, repeats=roc_repeats, ax=axs)
-plt.savefig(f"plots/roc_curve_repeats_{roc_repeats}_extra_tree_{number_trees}_all_features.pdf")
+fig, ax = plt.subplots(figsize=(6, 6))
+colors = cycle(["aqua", "darkorange", "cornflowerblue"])
+for i, class_name in enumerate(["slow", "medium", "fast"]):
+    if i == 0:
+        display = RocCurveDisplay.from_predictions(
+            y_onehot_test[:, i],
+            y_score[:, i],
+            name=f"{class_name} vs the rest",
+            #color=colors[i],
+            ax=ax,
+            plot_chance_level=True,
+        )
+    else:
+        display = RocCurveDisplay.from_predictions(
+            y_onehot_test[:, i],
+            y_score[:, i],
+            name=f"{class_name} vs the rest",
+            # color=colors[i],
+            ax=ax,
+            plot_chance_level=False,
+        )
+
+
+_ = display.ax_.set(
+    xlabel="False Positive Rate",
+    ylabel="True Positive Rate",
+    title="One-vs-Rest ROC curves:\nVirginica vs (Setosa & Versicolor)",
+)
+
 plt.show()

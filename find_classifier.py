@@ -31,27 +31,34 @@ def plot_history(naml):
     ax.set_ylim([median_val, max_val + (max_val - median_val)])
     plt.show()
 
-# do logging
-logger = logging.getLogger('naiveautoml')
-logger.setLevel(logging.INFO)
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
+if __name__ == "__main__":
+    # do logging
+    logger = logging.getLogger('naiveautoml')
+    logger.setLevel(logging.INFO)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
 
-naml = naiveautoml.NaiveAutoML(max_hpo_iterations=20, show_progress=True, scoring="accuracy")
+    naml = naiveautoml.NaiveAutoML(max_hpo_iterations=20, show_progress=True, scoring="accuracy")
 
-X, y = load_eye_tracking_data(make_binary=True)
-X.drop(columns=["participant", "time", "robot"], inplace=True)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
-print(X_train.shape, y_train.shape)
-naml.fit(X, y)
+    n_classes = 3
+    X, y = load_eye_tracking_data(number_of_classes=n_classes, load_preprocessed=True)
 
-print("---------------------------------")
-print(naml.chosen_model)
-print("---------------------------------")
-print(naml.history)
+    # preselecting the best subset
+    X = X[['sub_max_speed_fix', 'sub_mean_dispersion_fix', 'sub_mean_duration_fix', 'sub_mean_speed',
+           'sub_min_dispersion_fix', 'sub_min_speed_fix', 'sub_number_clusters_fix']]
 
-naml.history.to_csv("results/naml_history.csv")
-plot_history(naml)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+    y = y.to_numpy().ravel()
+
+    naml.fit(X, y)
+
+    print("---------------------------------")
+    print(naml.chosen_model)
+    print("---------------------------------")
+    print(naml.history)
+
+    naml.history.to_csv("results/autoML_classifiers/naml_history_eye_tracking_3_classes.csv")
+    plot_history(naml)
