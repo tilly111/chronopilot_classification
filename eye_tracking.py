@@ -25,6 +25,8 @@ from imblearn.over_sampling import BorderlineSMOTE
 
 from utils.feature_loader import load_eye_tracking_data, load_eye_tracking_data_slice
 
+from sklearn.metrics import auc, get_scorer
+
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.base import clone
 
@@ -38,7 +40,7 @@ from plotting_scripts.plot_physio import plot_physio3D, plot_physio2D
 # X.drop(columns=["participant", "time", "robot"], inplace=True)
 
 
-def fit_classifer(learner, x_train, x_test, y_train, y_test):
+def fit_classifer(learner, x_train, x_test, y_train, y_test, n_classes=2):
     # todo adjust accordingly to the number of classes
     # for two classes: ExtraTreesClassifier: bootstrap=True, max_features=0.4908846305986305, n_estimators=512, warm_start=True
     #  increase parameters because 512 is upper limit of autoML and more trees = better ;)
@@ -50,10 +52,13 @@ def fit_classifer(learner, x_train, x_test, y_train, y_test):
     learner_c.fit(x_train, y_train.values.ravel())
 
     y_pred = learner_c.predict(x_test)
-    # a_list.append(accuracy_score(y_test, y_pred))
+    if n_classes == 2:
+        scorer = get_scorer("accuracy")  # roc_auc
+    else:
+        scorer = get_scorer("accuracy")  # roc_auc_ovr
 
     # return accuracy_score(y_test, y_pred), confusion_matrix(y_test, y_pred), pl_interpretable
-    return roc_auc_score(y_test, y_pred), confusion_matrix(y_test, y_pred)  # , pl_interpretable
+    return scorer(learner_c, x_test, y_test), confusion_matrix(y_test, y_pred)  # , pl_interpretable
 
 if __name__ == '__main__':
     if platform.system() == "Darwin":
@@ -73,7 +78,7 @@ if __name__ == '__main__':
     # X.drop(columns=["time", "robot", "participant"], inplace=True)
 
     # use preprocessing: the best subset
-    X = X[['sub_max_diameter2d', 'sub_max_speed_fix', 'sub_mean_duration_fix', 'sub_mean_speed', 'sub_mean_speed_fix', 'sub_min_diameter2d', 'sub_number_clusters_fix']]
+    # X = X[['sub_max_diameter2d', 'sub_max_speed_fix', 'sub_mean_duration_fix', 'sub_mean_speed', 'sub_mean_speed_fix', 'sub_min_diameter2d', 'sub_number_clusters_fix']]
     # pca = PCA()  # n_components=7
     # X_pp = pca.fit_transform(X)
     # X = pd.DataFrame(X_pp, columns=[f"PCA_{i}" for i in range(7)])
@@ -118,7 +123,8 @@ if __name__ == '__main__':
                 X_train,
                 X_val,
                 y_train,
-                y_val))
+                y_val,
+                n_classes))
         def _cb(future):
             pbar.update(1)
 
@@ -145,6 +151,8 @@ if __name__ == '__main__':
     upper_lim = np.max(np.unique(acc_list, return_counts=True)[1])*10
     plt.vlines(majority_class, 0, upper_lim, colors="red", label="Majority class", linestyles="--")
     plt.legend()
+    plt.savefig(
+        f"plots/eye_tracking_analysis/accuracy_hist_repeats_{num_splits}_extra_tree_{n_classes}_classes_n_features:{X.shape[0]}.pdf")
 
     if n_classes == 2:
         disp = ConfusionMatrixDisplay(confusion_matrix=conf_m,
@@ -154,37 +162,16 @@ if __name__ == '__main__':
                                       display_labels=["slow", "medium", "fast"])
 
     disp.plot()
-    plt.show()
-
+    plt.savefig(
+        f"plots/eye_tracking_analysis/confusion_matrix_repeats_{num_splits}_extra_tree_{n_classes}_classes_n_features:{X.shape[1]}.pdf")
+    # plt.show()
 
     # plot roc auc curve
     # learner = ExtraTreesClassifier(n_estimators=number_trees)
     # pl_interpretable = get_pipeline_for_features(learner, X, y, list(X.columns))
-    #
-    # fig, axs = plt.subplots(1, 1, figsize=(7, 7))
-    # get_mccv_ROC_display(pl_interpretable, X, y, repeats=roc_repeats, ax=axs)
-    # # plt.savefig(f"plots/eye_tracking_analysis/roc_curve_repeats_{roc_repeats}_extra_tree_{number_trees}_all_features.pdf")
-    # plt.show()
 
-    # plot learning curve
-    # fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(10, 6), sharey=True)
-    #
-    # common_params = {
-    #     "X": X,
-    #     "y": y,
-    #     "train_sizes": np.linspace(0.1, 1.0, 30),
-    #     "cv": StratifiedShuffleSplit(n_splits=num_splits, test_size=0.2, random_state=0),
-    #     "score_type": "both",
-    #     "n_jobs": os.cpu_count(),
-    #     "line_kw": {"marker": "o"},
-    #     "std_display_style": "fill_between",
-    #     "score_name": "roc_auc",
-    # }
-    #
-    # # for ax_idx, estimator in enumerate([naive_bayes, svc]):
-    # learner = ExtraTreesClassifier(n_estimators=number_trees)
-    # LearningCurveDisplay.from_estimator(learner, **common_params, ax=ax)
-    # handles, label = ax.get_legend_handles_labels()
-    # ax.legend(handles[:2], ["Training Score", "Test Score"])
-    # ax.set_title(f"Learning Curve for {learner.__class__.__name__}")
-    # plt.show()
+    # fig, axs = plt.subplots(1, 1, figsize=(7, 7))
+    # get_mccv_ROC_display(pl_interpretable, X, y, repeats=num_splits, ax=axs)  #
+    # plt.savefig(f"plots/eye_tracking_analysis/roc_curve_repeats_{num_splits}_extra_tree_{n_classes}_classes_n_features:{X.shape[0]}.pdf")
+    plt.show()
+

@@ -199,7 +199,7 @@ def get_scores_for_feature_combinations(classifier, data_pre_processor, X, y, ma
 if __name__ == '__main__':
     ## select hyperparameters
     number_trees = 1024
-    n_classes = 2
+    n_classes = 3
 
     # load data
     X, y = load_eye_tracking_data(number_of_classes=n_classes, load_preprocessed=True)
