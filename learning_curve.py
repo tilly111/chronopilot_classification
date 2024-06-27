@@ -196,8 +196,6 @@ def get_scores_for_feature_combinations(classifier, data_pre_processor, X, y, ma
     return dfs
 
 
-## TODO from felix
-
 if __name__ == '__main__':
     ## select hyperparameters
     number_trees = 1024

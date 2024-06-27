@@ -3,12 +3,14 @@ import os
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 
+import platform
+
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 
 from sklearn.feature_selection import RFECV, SequentialFeatureSelector
-from sklearn.metrics import confusion_matrix, f1_score, accuracy_score, ConfusionMatrixDisplay
+from sklearn.metrics import confusion_matrix, f1_score, accuracy_score, ConfusionMatrixDisplay, roc_auc_score
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 
 from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
@@ -36,31 +38,33 @@ from plotting_scripts.plot_physio import plot_physio3D, plot_physio2D
 # X.drop(columns=["participant", "time", "robot"], inplace=True)
 
 
-def fit_classifer(learner, data_pre_processor, x_train, x_test, y_train, y_test):
+def fit_classifer(learner, x_train, x_test, y_train, y_test):
     # todo adjust accordingly to the number of classes
     # for two classes: ExtraTreesClassifier: bootstrap=True, max_features=0.4908846305986305, n_estimators=512, warm_start=True
     #  increase parameters because 512 is upper limit of autoML and more trees = better ;)
     # learner = ExtraTreesClassifier(bootstrap=True, max_features=0.4908846305986305, n_estimators=1024, warm_start=True)
     #learner = ExtraTreesClassifier(n_estimators=1024)
     # data_pre_processor = VarianceThreshold()
-    data_pre_processor_c = clone(data_pre_processor)
     learner_c = clone(learner)
-    pl_interpretable = get_pipeline_for_features(learner_c, data_pre_processor_c)  # x_train, y_train, list(x_train.columns)
 
-    pl_interpretable.fit(x_train, y_train.values.ravel())
+    learner_c.fit(x_train, y_train.values.ravel())
 
-    y_pred = pl_interpretable.predict(x_test)
+    y_pred = learner_c.predict(x_test)
     # a_list.append(accuracy_score(y_test, y_pred))
 
-    return accuracy_score(y_test, y_pred), confusion_matrix(y_test, y_pred), pl_interpretable
+    # return accuracy_score(y_test, y_pred), confusion_matrix(y_test, y_pred), pl_interpretable
+    return roc_auc_score(y_test, y_pred), confusion_matrix(y_test, y_pred)  # , pl_interpretable
 
 if __name__ == '__main__':
-    matplotlib.use('TkAgg')
+    if platform.system() == "Darwin":
+        matplotlib.use('QtAgg')
+    elif platform.system() == "Linux":
+        matplotlib.use('TkAgg')
     num_splits = 500
     n_classes = 2
 
-    # X, y = load_eye_tracking_data(number_of_classes=n_classes, load_preprocessed=False, include_meta_label=True)
-    X, y = load_eye_tracking_data_slice(number_of_classes=n_classes, load_preprocessed=True)
+    X, y = load_eye_tracking_data(number_of_classes=n_classes, load_preprocessed=True)
+    # X, y = load_eye_tracking_data_slice(number_of_classes=n_classes, load_preprocessed=True)
 
     # use indiviual times experiments
     # y = y.loc[y["time"] == 5]
@@ -78,16 +82,19 @@ if __name__ == '__main__':
     # sm = BorderlineSMOTE(random_state=42)  # random_state=42
     # X, y = sm.fit_resample(X, y)
 
-    # print(f"X data shape: {X.shape}")
-    # print(f"y data shape: {y.shape}\n")
-    # print(f"distribution of y: {np.unique(y, return_counts=True)}")
+    print(f"X data shape: {X.shape}")
+    print(f"y data shape: {y.shape}\n")
+    print(f"distribution of y: {np.unique(y, return_counts=True)}")
+    _, counts = np.unique(y, return_counts=True)
+    majority_class = np.max(counts)/X.shape[0]
     # plt.hist(y)
     # plt.show()
     learner = ExtraTreesClassifier(n_estimators=1024)
     preprocessor = MinMaxScaler()
+    pl_interpretable = get_pipeline_for_features(learner, preprocessor)
 
     ## play trough
-    sss = StratifiedShuffleSplit(n_splits=num_splits, test_size=0.2, random_state=0)
+    # sss = StratifiedShuffleSplit(n_splits=num_splits, test_size=0.2, random_state=0)
 
     acc_list = []
     futures = []
@@ -96,20 +103,22 @@ if __name__ == '__main__':
     pbar = tqdm(total=num_splits)
     m_workers = os.cpu_count()
     with ProcessPoolExecutor(max_workers=m_workers) as executor:
-        for i, (train_index, test_index) in enumerate(sss.split(X, y)):
+        # for i, (train_index, test_index) in enumerate(sss.split(X, y)):
+        for seed in range(num_splits):
+            X_train, X_val, y_train, y_val = train_test_split(X, y, stratify=y, train_size=0.8, random_state=seed)
             # print(f"Fold {i}")
-            x_train, x_test = np.take(X, train_index, axis=0), np.take(X, test_index, axis=0)
-            y_train, y_test = np.take(y, train_index, axis=0), np.take(y, test_index, axis=0)
+            #x_train, x_test = np.take(X, train_index, axis=0), np.take(X, test_index, axis=0)
+            #y_train, y_test = np.take(y, train_index, axis=0), np.take(y, test_index, axis=0)
             # upsampling the data
             # sm = BorderlineSMOTE()  # random_state=42
             # x_train, y_train = sm.fit_resample(x_train, y_train)
 
             futures.append(executor.submit(
-                fit_classifer, learner, preprocessor,
-                x_train,
-                x_test,
+                fit_classifer, learner,
+                X_train,
+                X_val,
                 y_train,
-                y_test))
+                y_val))
         def _cb(future):
             pbar.update(1)
 
@@ -119,7 +128,7 @@ if __name__ == '__main__':
         as_completed(futures)
 
         for future in futures:
-            acc, conf_m_tmp, learner = future.result()
+            acc, conf_m_tmp = future.result()  # , learner
             acc_list.append(acc)
             conf_m += conf_m_tmp
             # todo get best lerner and do shap analysis
@@ -130,6 +139,12 @@ if __name__ == '__main__':
     print(f"Std accuracy: {np.std(acc_list)}")
     print(f"Max accuracy: {np.max(acc_list)}")
     print(f"Min accuracy: {np.min(acc_list)}")
+    plt.figure()
+    plt.hist(acc_list, label="Accuracy")
+    plt.xlabel("Accuracy")  # 0.5410447761
+    upper_lim = np.max(np.unique(acc_list, return_counts=True)[1])*10
+    plt.vlines(majority_class, 0, upper_lim, colors="red", label="Majority class", linestyles="--")
+    plt.legend()
 
     if n_classes == 2:
         disp = ConfusionMatrixDisplay(confusion_matrix=conf_m,
