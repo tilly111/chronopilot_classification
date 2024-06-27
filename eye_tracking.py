@@ -24,6 +24,7 @@ from imblearn.over_sampling import BorderlineSMOTE
 from utils.feature_loader import load_eye_tracking_data, load_eye_tracking_data_slice
 
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.base import clone
 
 import shap
 
@@ -35,14 +36,16 @@ from plotting_scripts.plot_physio import plot_physio3D, plot_physio2D
 # X.drop(columns=["participant", "time", "robot"], inplace=True)
 
 
-def fit_classifer(x_train, x_test, y_train, y_test):
+def fit_classifer(learner, data_pre_processor, x_train, x_test, y_train, y_test):
     # todo adjust accordingly to the number of classes
     # for two classes: ExtraTreesClassifier: bootstrap=True, max_features=0.4908846305986305, n_estimators=512, warm_start=True
     #  increase parameters because 512 is upper limit of autoML and more trees = better ;)
-    learner = ExtraTreesClassifier(bootstrap=True, max_features=0.4908846305986305, n_estimators=1024, warm_start=True)
-    data_pre_processor = VarianceThreshold()
-
-    pl_interpretable = get_pipeline_for_features(learner, data_pre_processor)  # x_train, y_train, list(x_train.columns)
+    # learner = ExtraTreesClassifier(bootstrap=True, max_features=0.4908846305986305, n_estimators=1024, warm_start=True)
+    #learner = ExtraTreesClassifier(n_estimators=1024)
+    # data_pre_processor = VarianceThreshold()
+    data_pre_processor_c = clone(data_pre_processor)
+    learner_c = clone(learner)
+    pl_interpretable = get_pipeline_for_features(learner_c, data_pre_processor_c)  # x_train, y_train, list(x_train.columns)
 
     pl_interpretable.fit(x_train, y_train.values.ravel())
 
@@ -66,7 +69,7 @@ if __name__ == '__main__':
     # X.drop(columns=["time", "robot", "participant"], inplace=True)
 
     # use preprocessing: the best subset
-    # X = X[['sub_max_speed_fix', 'sub_mean_dispersion_fix', 'sub_mean_duration_fix', 'sub_mean_speed', 'sub_min_dispersion_fix', 'sub_min_speed_fix', 'sub_number_clusters_fix']]
+    X = X[['sub_max_diameter2d', 'sub_max_speed_fix', 'sub_mean_duration_fix', 'sub_mean_speed', 'sub_mean_speed_fix', 'sub_min_diameter2d', 'sub_number_clusters_fix']]
     # pca = PCA()  # n_components=7
     # X_pp = pca.fit_transform(X)
     # X = pd.DataFrame(X_pp, columns=[f"PCA_{i}" for i in range(7)])
@@ -75,11 +78,13 @@ if __name__ == '__main__':
     # sm = BorderlineSMOTE(random_state=42)  # random_state=42
     # X, y = sm.fit_resample(X, y)
 
-    print(f"X data shape: {X.shape}")
-    print(f"y data shape: {y.shape}\n")
-    print(f"distribution of y: {np.unique(y, return_counts=True)}")
-    plt.hist(y)
-    plt.show()
+    # print(f"X data shape: {X.shape}")
+    # print(f"y data shape: {y.shape}\n")
+    # print(f"distribution of y: {np.unique(y, return_counts=True)}")
+    # plt.hist(y)
+    # plt.show()
+    learner = ExtraTreesClassifier(n_estimators=1024)
+    preprocessor = MinMaxScaler()
 
     ## play trough
     sss = StratifiedShuffleSplit(n_splits=num_splits, test_size=0.2, random_state=0)
@@ -89,17 +94,18 @@ if __name__ == '__main__':
     conf_m = np.zeros((n_classes, n_classes))
 
     pbar = tqdm(total=num_splits)
-    with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
+    m_workers = os.cpu_count()
+    with ProcessPoolExecutor(max_workers=m_workers) as executor:
         for i, (train_index, test_index) in enumerate(sss.split(X, y)):
             # print(f"Fold {i}")
             x_train, x_test = np.take(X, train_index, axis=0), np.take(X, test_index, axis=0)
             y_train, y_test = np.take(y, train_index, axis=0), np.take(y, test_index, axis=0)
             # upsampling the data
-            sm = BorderlineSMOTE()  # random_state=42
-            x_train, y_train = sm.fit_resample(x_train, y_train)
+            # sm = BorderlineSMOTE()  # random_state=42
+            # x_train, y_train = sm.fit_resample(x_train, y_train)
 
             futures.append(executor.submit(
-                fit_classifer,
+                fit_classifer, learner, preprocessor,
                 x_train,
                 x_test,
                 y_train,

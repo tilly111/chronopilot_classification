@@ -109,9 +109,9 @@ def get_learning_curves(learner, X, y, repeats, n_classes, first_anchor=0.1, las
     return lcs
 
 # does the fitting of the model and returns the score
-def get_score_for_features(classifier, X, y, feature_list, repeats, n_classes):
+def get_score_for_features(classifier, data_pre_processor, X, y, feature_list, repeats, n_classes):
     X_red = X[feature_list]
-    pl_interpretable = get_pipeline_for_features(classifier, X, y, feature_list)
+    pl_interpretable = get_pipeline_for_features(classifier, data_pre_processor)
     if n_classes == 2:
         scorer = get_scorer("roc_auc")
     else:
@@ -125,7 +125,7 @@ def get_score_for_features(classifier, X, y, feature_list, repeats, n_classes):
     return results
 
 # schedules getting the scores for the feature combinations
-def get_scores_for_feature_combinations_based_on_previous_selections(classifier, X, y, repeats_per_size, df_last_stage,
+def get_scores_for_feature_combinations_based_on_previous_selections(classifier, data_pre_processor, X, y, repeats_per_size, df_last_stage,
                                                                      num_combos_from_last_stage, n_classes):
     if df_last_stage is None:
         combos_for_k = [[c] for c in X.columns]
@@ -147,7 +147,7 @@ def get_scores_for_feature_combinations_based_on_previous_selections(classifier,
 
         # Submit tasks to the executor
         futures = [
-            executor.submit(get_score_for_features, classifier, X, y, combo, repeats_per_size[len(combo)], n_classes)
+            executor.submit(get_score_for_features, classifier, data_pre_processor, X, y, combo, repeats_per_size[len(combo)], n_classes)
             for combo in combos_for_k
         ]
 
@@ -171,7 +171,7 @@ def get_scores_for_feature_combinations_based_on_previous_selections(classifier,
     return pd.DataFrame(rows, columns=["combo", "scores", "score_mean"]).sort_values("score_mean", ascending=False)
 
 
-def get_scores_for_feature_combinations(classifier, X, y, max_size, repeats_per_size, num_combos_from_last_stage, n_classes):
+def get_scores_for_feature_combinations(classifier, data_pre_processor, X, y, max_size, repeats_per_size, num_combos_from_last_stage, n_classes):
     dfs = {}
 
     for k in range(1, max_size + 1):
@@ -188,7 +188,7 @@ def get_scores_for_feature_combinations(classifier, X, y, max_size, repeats_per_
                 df_for_last_k = None
             if k > 1:
                 df_for_last_k = dfs[k - 1]  # .drop(columns=attributes_excluded_in_multivar_importance)
-            dfs[k] = get_scores_for_feature_combinations_based_on_previous_selections(classifier, X, y,
+            dfs[k] = get_scores_for_feature_combinations_based_on_previous_selections(classifier, data_pre_processor, X, y,
                                                                                       repeats_per_size, df_for_last_k,
                                                                                       num_combos_from_last_stage[
                                                                                           k] if k > 1 else 0, n_classes)
@@ -200,8 +200,8 @@ def get_scores_for_feature_combinations(classifier, X, y, max_size, repeats_per_
 
 if __name__ == '__main__':
     ## select hyperparameters
-    number_trees = 1000
-    n_classes = 3
+    number_trees = 1024
+    n_classes = 2
 
     # load data
     X, y = load_eye_tracking_data(number_of_classes=n_classes, load_preprocessed=True)
@@ -209,14 +209,16 @@ if __name__ == '__main__':
     max_feature_set_size = X.shape[1]
 
     learner = ExtraTreesClassifier(n_estimators=number_trees)
+    data_pre_processor = MinMaxScaler()
 
     df_auc_results_per_feature_combo = get_scores_for_feature_combinations(
         learner,
+        data_pre_processor,
         X,
         y,
         max_feature_set_size,
         repeats_per_size={i: 5 for i in range(1, max_feature_set_size + 1)},
-        num_combos_from_last_stage={i: 10 if i < 10 else (5 if i < 20 else 2) for i in range(2, max_feature_set_size + 1)},
+        num_combos_from_last_stage={i: 10 if i < 30 else (5 if i < 50 else 2) for i in range(2, max_feature_set_size + 1)},
         n_classes=n_classes
     )
 
@@ -252,7 +254,7 @@ if __name__ == '__main__':
     ax.set_ylabel("AUC ROC")
     # ax.set_ylim([0.6, 0.8])
     ax.axhline(max(mu), color="black", linestyle="--")
-    plt.savefig(f"plots/eye_tracking_analysis/feature_selection{n_classes}_classes.pdf", bbox_inches="tight", pad_inches=0)
+    plt.savefig(f"plots/eye_tracking_analysis/feature_selection_{n_classes}_classes.pdf", bbox_inches="tight", pad_inches=0)
     # plt.show()
 
 
@@ -264,7 +266,7 @@ if __name__ == '__main__':
         lc_file = f"results/eye_tracking_{n_classes}_classes/lcs/lcs_{k}.csv"
         print(f"Get curves for {k} features with combo {combo}.")
         lcs[k] = get_learning_curves(
-            learner=get_pipeline_for_features(learner, X, y, combo),
+            learner=get_pipeline_for_features(learner, data_pre_processor),
             X=X[combo],
             y=y,
             repeats=500,
@@ -290,5 +292,7 @@ if __name__ == '__main__':
     # ax.set_ylim([0.45,0.8])
     ax.axhline(0.725, color="blue", linestyle="--")
     ax.axhline(0.5, color="red", linestyle="--")
+    plt.savefig(f"plots/eye_tracking_analysis/learning_curves_{n_classes}_classes.pdf", bbox_inches="tight",
+                pad_inches=0)
     plt.show()
 

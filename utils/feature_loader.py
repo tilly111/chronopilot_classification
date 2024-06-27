@@ -78,6 +78,7 @@ def load_eye_tracking_data(number_of_classes=2, load_preprocessed=True, label_na
             y_train = pd.read_csv(f"preprocessed_data/eye_tracking_2_classes/y_train.csv")
             # X_test = pd.read_csv(f"preprocessed_data/eye_tracking_2_classes/X_test.csv")
             # y_test = pd.read_csv(f"preprocessed_data/eye_tracking_2_classes/y_test.csv")
+            X_train.drop(columns=["participant", "time", "robot"], inplace=True)  # drop setting information
         elif number_of_classes == 3:
             X_train = pd.read_csv(f"preprocessed_data/eye_tracking_3_classes/X_train.csv")
             y_train = pd.read_csv(f"preprocessed_data/eye_tracking_3_classes/y_train.csv")

@@ -41,7 +41,7 @@ if __name__ == "__main__":
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
-    naml = naiveautoml.NaiveAutoML(max_hpo_iterations=100, show_progress=True, scoring="accuracy")
+    naml = naiveautoml.NaiveAutoML(max_hpo_iterations=20, show_progress=True, scoring="accuracy")
 
     n_classes = 2
     X, y = load_eye_tracking_data(number_of_classes=n_classes, load_preprocessed=True)
