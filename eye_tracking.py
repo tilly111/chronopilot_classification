@@ -21,7 +21,7 @@ from utils.learner_pipeline import get_pipeline_for_features
 from sklearn.feature_selection import VarianceThreshold
 from plotting_scripts.roc_curve_plotting import get_mccv_ROC_display
 
-from imblearn.over_sampling import BorderlineSMOTE
+from imblearn.over_sampling import BorderlineSMOTE, KMeansSMOTE, ADASYN
 
 from utils.feature_loader import load_eye_tracking_data, load_eye_tracking_data_slice
 
@@ -66,7 +66,7 @@ if __name__ == '__main__':
     elif platform.system() == "Linux":
         matplotlib.use('TkAgg')
     num_splits = 500
-    n_classes = 2
+    n_classes = 3
 
     X, y = load_eye_tracking_data(number_of_classes=n_classes, load_preprocessed=True)
     # X, y = load_eye_tracking_data_slice(number_of_classes=n_classes, load_preprocessed=True)
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     # X.drop(columns=["time", "robot", "participant"], inplace=True)
 
     # use preprocessing: the best subset
-    # X = X[['sub_max_diameter2d', 'sub_max_speed_fix', 'sub_mean_duration_fix', 'sub_mean_speed', 'sub_mean_speed_fix', 'sub_min_diameter2d', 'sub_number_clusters_fix']]
+    X = X[['sub_max_speed_fix', 'sub_mean_dispersion_fix', 'sub_mean_duration_fix', 'sub_min_dispersion_fix', 'sub_min_speed_fix', 'sub_number_clusters_fix']]
     # pca = PCA()  # n_components=7
     # X_pp = pca.fit_transform(X)
     # X = pd.DataFrame(X_pp, columns=[f"PCA_{i}" for i in range(7)])
@@ -115,15 +115,15 @@ if __name__ == '__main__':
             #x_train, x_test = np.take(X, train_index, axis=0), np.take(X, test_index, axis=0)
             #y_train, y_test = np.take(y, train_index, axis=0), np.take(y, test_index, axis=0)
             # upsampling the data
-            # sm = BorderlineSMOTE()  # random_state=42
-            # x_train, y_train = sm.fit_resample(x_train, y_train)
+            sm = ADASYN()  # random_state=42
+            X_train, y_train = sm.fit_resample(X_train, y_train)
 
             futures.append(executor.submit(
                 fit_classifer, learner,
                 X_train,
-                X_val,
+                X_val,  # val
                 y_train,
-                y_val,
+                y_val,  # val
                 n_classes))
         def _cb(future):
             pbar.update(1)
@@ -146,13 +146,13 @@ if __name__ == '__main__':
     print(f"Max accuracy: {np.max(acc_list)}")
     print(f"Min accuracy: {np.min(acc_list)}")
     plt.figure()
-    plt.hist(acc_list, label="Accuracy")
+    plt.hist(acc_list, label=r'Mean Accuracy (ACC = %0.2f $\pm$ %0.2f)' % (np.mean(acc_list), np.std(acc_list)))
     plt.xlabel("Accuracy")  # 0.5410447761
     upper_lim = np.max(np.unique(acc_list, return_counts=True)[1])*10
     plt.vlines(majority_class, 0, upper_lim, colors="red", label="Majority class", linestyles="--")
     plt.legend()
     plt.savefig(
-        f"plots/eye_tracking_analysis/accuracy_hist_repeats_{num_splits}_extra_tree_{n_classes}_classes_n_features:{X.shape[0]}.pdf")
+        f"plots/eye_tracking_analysis/accuracy_hist_repeats_{num_splits}_extra_tree_{n_classes}_classes_n_features:{X.shape[1]}.pdf")
 
     if n_classes == 2:
         disp = ConfusionMatrixDisplay(confusion_matrix=conf_m,
@@ -172,6 +172,6 @@ if __name__ == '__main__':
 
     # fig, axs = plt.subplots(1, 1, figsize=(7, 7))
     # get_mccv_ROC_display(pl_interpretable, X, y, repeats=num_splits, ax=axs)  #
-    # plt.savefig(f"plots/eye_tracking_analysis/roc_curve_repeats_{num_splits}_extra_tree_{n_classes}_classes_n_features:{X.shape[0]}.pdf")
+    # plt.savefig(f"plots/eye_tracking_analysis/roc_curve_repeats_{num_splits}_extra_tree_{n_classes}_classes_n_features:{X.shape[1]}.pdf")
     plt.show()
 
