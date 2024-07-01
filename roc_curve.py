@@ -8,7 +8,7 @@ from itertools import cycle
 from utils.feature_loader import load_scream_data
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelBinarizer
-from utils.feature_loader import load_eye_tracking_data
+from utils.feature_loader import load_eye_tracking_data, load_eye_tracking_data_tw
 from sklearn.model_selection import train_test_split
 
 from sklearn.metrics import RocCurveDisplay
@@ -30,7 +30,7 @@ elif platform.system() == "Windows":
 
 
 ## load training/validation
-X, y = load_eye_tracking_data(number_of_classes=3, load_preprocessed=True)
+X, y = load_eye_tracking_data_tw(number_of_classes=2, load_preprocessed=True)
 print(y.shape)
 print(X.shape)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)

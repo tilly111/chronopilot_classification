@@ -23,7 +23,7 @@ from plotting_scripts.roc_curve_plotting import get_mccv_ROC_display
 
 from imblearn.over_sampling import BorderlineSMOTE, KMeansSMOTE, ADASYN
 
-from utils.feature_loader import load_eye_tracking_data, load_eye_tracking_data_slice
+from utils.feature_loader import load_eye_tracking_data, load_eye_tracking_data_slice, load_eye_tracking_data_tw
 
 from sklearn.metrics import auc, get_scorer
 
@@ -66,9 +66,9 @@ if __name__ == '__main__':
     elif platform.system() == "Linux":
         matplotlib.use('TkAgg')
     num_splits = 500
-    n_classes = 3
+    n_classes = 2
 
-    X, y = load_eye_tracking_data(number_of_classes=n_classes, load_preprocessed=True)
+    X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True)
     # X, y = load_eye_tracking_data_slice(number_of_classes=n_classes, load_preprocessed=True)
 
     # use indiviual times experiments
@@ -78,7 +78,8 @@ if __name__ == '__main__':
     # X.drop(columns=["time", "robot", "participant"], inplace=True)
 
     # use preprocessing: the best subset
-    X = X[['sub_max_speed_fix', 'sub_mean_dispersion_fix', 'sub_mean_duration_fix', 'sub_min_dispersion_fix', 'sub_min_speed_fix', 'sub_number_clusters_fix']]
+    # X = X[['sub_max_speed_fix', 'sub_mean_dispersion_fix', 'sub_mean_duration_fix', 'sub_min_dispersion_fix', 'sub_min_speed_fix', 'sub_number_clusters_fix']]
+    X.drop(columns=["slice"])
     # pca = PCA()  # n_components=7
     # X_pp = pca.fit_transform(X)
     # X = pd.DataFrame(X_pp, columns=[f"PCA_{i}" for i in range(7)])
@@ -101,77 +102,77 @@ if __name__ == '__main__':
     ## play trough
     # sss = StratifiedShuffleSplit(n_splits=num_splits, test_size=0.2, random_state=0)
 
-    acc_list = []
-    futures = []
-    conf_m = np.zeros((n_classes, n_classes))
-
-    pbar = tqdm(total=num_splits)
-    m_workers = os.cpu_count()
-    with ProcessPoolExecutor(max_workers=m_workers) as executor:
-        # for i, (train_index, test_index) in enumerate(sss.split(X, y)):
-        for seed in range(num_splits):
-            X_train, X_val, y_train, y_val = train_test_split(X, y, stratify=y, train_size=0.8, random_state=seed)
-            # print(f"Fold {i}")
-            #x_train, x_test = np.take(X, train_index, axis=0), np.take(X, test_index, axis=0)
-            #y_train, y_test = np.take(y, train_index, axis=0), np.take(y, test_index, axis=0)
-            # upsampling the data
-            sm = ADASYN()  # random_state=42
-            X_train, y_train = sm.fit_resample(X_train, y_train)
-
-            futures.append(executor.submit(
-                fit_classifer, learner,
-                X_train,
-                X_val,  # val
-                y_train,
-                y_val,  # val
-                n_classes))
-        def _cb(future):
-            pbar.update(1)
-
-        for future in futures:
-            future.add_done_callback(_cb)
-
-        as_completed(futures)
-
-        for future in futures:
-            acc, conf_m_tmp = future.result()  # , learner
-            acc_list.append(acc)
-            conf_m += conf_m_tmp
-            # todo get best lerner and do shap analysis
-        conf_m /= num_splits
-    pbar.close()
-    print("\n")
-    print(f"Mean accuracy: {np.mean(acc_list)}")
-    print(f"Std accuracy: {np.std(acc_list)}")
-    print(f"Max accuracy: {np.max(acc_list)}")
-    print(f"Min accuracy: {np.min(acc_list)}")
-    plt.figure()
-    plt.hist(acc_list, label=r'Mean Accuracy (ACC = %0.2f $\pm$ %0.2f)' % (np.mean(acc_list), np.std(acc_list)))
-    plt.xlabel("Accuracy")  # 0.5410447761
-    upper_lim = np.max(np.unique(acc_list, return_counts=True)[1])*10
-    plt.vlines(majority_class, 0, upper_lim, colors="red", label="Majority class", linestyles="--")
-    plt.legend()
-    plt.savefig(
-        f"plots/eye_tracking_analysis/accuracy_hist_repeats_{num_splits}_extra_tree_{n_classes}_classes_n_features:{X.shape[1]}.pdf")
-
-    if n_classes == 2:
-        disp = ConfusionMatrixDisplay(confusion_matrix=conf_m,
-                                      display_labels=["slow", "fast"])
-    elif n_classes == 3:
-        disp = ConfusionMatrixDisplay(confusion_matrix=conf_m,
-                                      display_labels=["slow", "medium", "fast"])
-
-    disp.plot()
-    plt.savefig(
-        f"plots/eye_tracking_analysis/confusion_matrix_repeats_{num_splits}_extra_tree_{n_classes}_classes_n_features:{X.shape[1]}.pdf")
-    # plt.show()
+    # acc_list = []
+    # futures = []
+    # conf_m = np.zeros((n_classes, n_classes))
+    #
+    # pbar = tqdm(total=num_splits)
+    # m_workers = os.cpu_count()
+    # with ProcessPoolExecutor(max_workers=m_workers) as executor:
+    #     # for i, (train_index, test_index) in enumerate(sss.split(X, y)):
+    #     for seed in range(num_splits):
+    #         X_train, X_val, y_train, y_val = train_test_split(X, y, stratify=y, train_size=0.8, random_state=seed)
+    #         # print(f"Fold {i}")
+    #         #x_train, x_test = np.take(X, train_index, axis=0), np.take(X, test_index, axis=0)
+    #         #y_train, y_test = np.take(y, train_index, axis=0), np.take(y, test_index, axis=0)
+    #         # upsampling the data
+    #         sm = ADASYN()  # random_state=42
+    #         X_train, y_train = sm.fit_resample(X_train, y_train)
+    #
+    #         futures.append(executor.submit(
+    #             fit_classifer, learner,
+    #             X_train,
+    #             X_val,  # val
+    #             y_train,
+    #             y_val,  # val
+    #             n_classes))
+    #     def _cb(future):
+    #         pbar.update(1)
+    #
+    #     for future in futures:
+    #         future.add_done_callback(_cb)
+    #
+    #     as_completed(futures)
+    #
+    #     for future in futures:
+    #         acc, conf_m_tmp = future.result()  # , learner
+    #         acc_list.append(acc)
+    #         conf_m += conf_m_tmp
+    #         # todo get best lerner and do shap analysis
+    #     conf_m /= num_splits
+    # pbar.close()
+    # print("\n")
+    # print(f"Mean accuracy: {np.mean(acc_list)}")
+    # print(f"Std accuracy: {np.std(acc_list)}")
+    # print(f"Max accuracy: {np.max(acc_list)}")
+    # print(f"Min accuracy: {np.min(acc_list)}")
+    # plt.figure()
+    # plt.hist(acc_list, label=r'Mean Accuracy (ACC = %0.2f $\pm$ %0.2f)' % (np.mean(acc_list), np.std(acc_list)))
+    # plt.xlabel("Accuracy")  # 0.5410447761
+    # upper_lim = np.max(np.unique(acc_list, return_counts=True)[1])*10
+    # plt.vlines(majority_class, 0, upper_lim, colors="red", label="Majority class", linestyles="--")
+    # plt.legend()
+    # plt.savefig(
+    #     f"plots/eye_tracking_analysis/accuracy_hist_repeats_{num_splits}_extra_tree_{n_classes}_classes_n_features:{X.shape[1]}.pdf")
+    #
+    # if n_classes == 2:
+    #     disp = ConfusionMatrixDisplay(confusion_matrix=conf_m,
+    #                                   display_labels=["slow", "fast"])
+    # elif n_classes == 3:
+    #     disp = ConfusionMatrixDisplay(confusion_matrix=conf_m,
+    #                                   display_labels=["slow", "medium", "fast"])
+    #
+    # disp.plot()
+    # plt.savefig(
+    #     f"plots/eye_tracking_analysis/confusion_matrix_repeats_{num_splits}_extra_tree_{n_classes}_classes_n_features:{X.shape[1]}.pdf")
+    # # plt.show()
 
     # plot roc auc curve
     # learner = ExtraTreesClassifier(n_estimators=number_trees)
-    # pl_interpretable = get_pipeline_for_features(learner, X, y, list(X.columns))
+    pl_interpretable = get_pipeline_for_features(learner, preprocessor)
 
-    # fig, axs = plt.subplots(1, 1, figsize=(7, 7))
-    # get_mccv_ROC_display(pl_interpretable, X, y, repeats=num_splits, ax=axs)  #
+    fig, axs = plt.subplots(1, 1, figsize=(7, 7))
+    get_mccv_ROC_display(pl_interpretable, X, y, repeats=num_splits, ax=axs)  #
     # plt.savefig(f"plots/eye_tracking_analysis/roc_curve_repeats_{num_splits}_extra_tree_{n_classes}_classes_n_features:{X.shape[1]}.pdf")
     plt.show()
 
