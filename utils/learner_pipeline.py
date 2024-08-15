@@ -1,6 +1,5 @@
 from sklearn.pipeline import Pipeline
-from sklearn.feature_selection import VarianceThreshold
-# sklearn.feature_selection._variance_threshold.VarianceThreshold
+
 
 def get_pipeline_for_features(classifier, data_pre_processor, X=None, y=None, feature_list=None):
     steps = []
@@ -8,6 +7,7 @@ def get_pipeline_for_features(classifier, data_pre_processor, X=None, y=None, fe
     # attributes_that_require_encoding = list(set(feature_list) & set(categorical_attributes))
     # if attributes_that_require_encoding:
     #     steps.append(("Categorical Encoder", make_column_transformer((OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), attributes_that_require_encoding), remainder="passthrough")))
-    steps.append(('data-pre-processor', VarianceThreshold()))
+    if data_pre_processor is not None:
+        steps.append(('data-pre-processor', data_pre_processor))
     steps.append(("Learner", classifier))
     return Pipeline(steps)

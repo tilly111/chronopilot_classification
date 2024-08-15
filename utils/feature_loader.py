@@ -223,32 +223,44 @@ def load_eye_tracking_data_slice(number_of_classes=2, load_preprocessed=True, la
     return data_2, y_all
 
 def load_eye_tracking_data_tw(number_of_classes=2, load_preprocessed=True, tw=10, label_name=["ppot"],
-                                 include_meta_label=False) -> tuple[pd.DataFrame, pd.DataFrame]:
+                                 include_meta_label=False, load_test=False) -> tuple[pd.DataFrame, pd.DataFrame]:
     if load_preprocessed:
-        if number_of_classes == 2:
-            X_train = pd.read_csv(f"preprocessed_data/eye_tracking_2_classes/X_train_tw_{tw}.csv")
-            y_train = pd.read_csv(f"preprocessed_data/eye_tracking_2_classes/y_train_tw_{tw}.csv")
-        elif number_of_classes == 3:
-            X_train = pd.read_csv(f"preprocessed_data/eye_tracking_3_classes/X_train_tw_{tw}.csv")
-            y_train = pd.read_csv(f"preprocessed_data/eye_tracking_3_classes/y_train_tw_{tw}.csv")
+        if load_test:
+            if number_of_classes == 2:
+                X_test = pd.read_csv(f"preprocessed_data/eye_tracking_2_classes/X_test_tw_{tw}_label_{label_name[0]}.csv")
+                y_test = pd.read_csv(f"preprocessed_data/eye_tracking_2_classes/y_test_tw_{tw}_label_{label_name[0]}.csv")
+            elif number_of_classes == 3:
+                X_test = pd.read_csv(f"preprocessed_data/eye_tracking_3_classes/X_test_tw_{tw}_label_{label_name[0]}.csv")
+                y_test = pd.read_csv(f"preprocessed_data/eye_tracking_3_classes/y_test_tw_{tw}_label_{label_name[0]}.csv")
+            else:
+                print("Number of classes not preprocessed")
+                X_test = None
+                y_test = None
+            return X_test, y_test
         else:
-            print("Number of classes not preprocessed")
-            X_train = None
-            y_train = None
-        return X_train, y_train
+            if number_of_classes == 2:
+                X_train = pd.read_csv(f"preprocessed_data/eye_tracking_2_classes/X_train_tw_{tw}_label_{label_name[0]}.csv")
+                y_train = pd.read_csv(f"preprocessed_data/eye_tracking_2_classes/y_train_tw_{tw}_label_{label_name[0]}.csv")
+            elif number_of_classes == 3:
+                X_train = pd.read_csv(f"preprocessed_data/eye_tracking_3_classes/X_train_tw_{tw}_label_{label_name[0]}.csv")
+                y_train = pd.read_csv(f"preprocessed_data/eye_tracking_3_classes/y_train_tw_{tw}_label_{label_name[0]}.csv")
+            else:
+                print("Number of classes not preprocessed")
+                X_train = None
+                y_train = None
+            return X_train, y_train
     if include_meta_label:
         # include meta-data to labels if we want to do analysis with them
         label_name = label_name + ["participant", "time", "robot"]
-    #data = pd.read_csv(f"/Volumes/Data/chronopilot/Julia_study/features/fixations_features_tw_{tw}.csv")
-    data_2 = pd.read_csv(f"/Volumes/Data/chronopilot/Julia_study/features/fixations_features_tw_{tw}.csv")
-    # data_2.drop(columns=["participant", "robot", "time"], inplace=True)  # TODO probably put back in
-    #data_2.columns = [f"{col}_fix" for col in data_2.columns]
-    #data_2 = pd.concat([data, data_2], axis=1)
+    data = pd.read_csv(f"/Volumes/Data/chronopilot/Julia_study/features/all_exp_pupil_features_tw_{tw}.csv")
+    data_2 = pd.read_csv(f"/Volumes/Data/chronopilot/Julia_study/features/all_exp_fixations_features_tw_{tw}.csv")
+    data_2.drop(columns=["participant", "robot", "time"], inplace=True)
+    data_2.columns = [f"{col}_fix" for col in data_2.columns]
+    data_2 = pd.concat([data, data_2], axis=1)
 
     labels = pd.read_csv(f"/Volumes/Data/chronopilot/Julia_study/features/all_labels.csv")
 
-    # todo hack -> run feature calculation properly
-    #data_2.drop(columns=["sub_number_clusters"], inplace=True)
+    data_2.replace([np.inf, -np.inf], np.nan, inplace=True)
     data_2.dropna(inplace=True)
 
     y_all = None
@@ -258,10 +270,14 @@ def load_eye_tracking_data_tw(number_of_classes=2, load_preprocessed=True, tw=10
         robot = data_2["robot"].iloc[i]
         participant = data_2["participant"].iloc[i]
 
-        y = \
-            labels.loc[
-                ((labels["time"] == time) & (labels["robot"] == robot) & (labels["participant"] == participant))][
-                label_name]
+        if label_name[0] == "ppot":
+            y = labels.loc[((labels["time"] == time) & (labels["robot"] == robot) & (labels["participant"] == participant))][label_name]
+        elif label_name[0] == "duration_estimate":
+            y = labels.loc[((labels["time"] == time) & (labels["robot"] == robot) & (labels["participant"] == participant))][label_name]
+            y = y / time
+        else:
+            print("Label name not found")
+            y = None
 
         try:
             y = y.squeeze()
@@ -276,15 +292,24 @@ def load_eye_tracking_data_tw(number_of_classes=2, load_preprocessed=True, tw=10
         except:
             x_remove.append(i)
 
+    # depend on the number of classes we have to adjust the labels
     if number_of_classes == 2:
-        if len(label_name) == 1:
+        # ppot processing
+        if label_name[0] == "ppot":
             y_all = np.where(y_all > 2, 1, 0)
-        else:
-            y_all[:, 3] = np.where(y_all[:, 3] > 2, 1, 0)
+        elif label_name[0] == "duration_estimate":
+            y_all = np.where(y_all >= 0.9, 1, 0)  # TODO adjust for slight underestimation in most settings -> 0.9 almost balanced classes
     elif number_of_classes == 3 and len(label_name) == 1:
-        y_all[y_all < 2] = 0
-        y_all[y_all == 2] = 1
-        y_all[y_all > 2] = 2
+        if label_name[0] == "ppot":
+            y_all[y_all < 2] = 0
+            y_all[y_all == 2] = 1
+            y_all[y_all > 2] = 2
+        elif label_name[0] == "duration_estimate":
+            y_all[y_all < 0.75] = 0
+            y_all[((y_all >= 0.75) & (y_all <= 1.05))] = 1
+            y_all[y_all > 1.05] = 2
+    else:  # probably the true label -- shouldnt work
+        print("Number of classes not preprocessed")
     y_all = pd.DataFrame(y_all, columns=label_name)
     data_2.drop(data_2.index[x_remove], inplace=True)
 

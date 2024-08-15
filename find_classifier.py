@@ -4,7 +4,7 @@ import pandas as pd
 import naiveautoml
 import logging
 from sklearn.model_selection import train_test_split
-from utils.feature_loader import load_eye_tracking_data
+from utils.feature_loader import load_eye_tracking_data, load_eye_tracking_data_tw
 import matplotlib.pyplot as plt
 
 # for interactive plots
@@ -43,8 +43,11 @@ if __name__ == "__main__":
 
     naml = naiveautoml.NaiveAutoML(max_hpo_iterations=20, show_progress=True, scoring="accuracy")
 
-    n_classes = 2
-    X, y = load_eye_tracking_data(number_of_classes=n_classes, load_preprocessed=True)
+    n_classes = 3
+    tw = 20  # time window in seconds
+    label = "ppot"  # "ppot" or "duration_estimate"
+
+    X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, tw=tw, label_name=[label])
 
     # preselecting the best subset
     #X = X[['sub_max_speed_fix', 'sub_mean_dispersion_fix', 'sub_mean_duration_fix', 'sub_mean_speed',
@@ -60,5 +63,5 @@ if __name__ == "__main__":
     print("---------------------------------")
     print(naml.history)
 
-    naml.history.to_csv(f"results/autoML_classifiers/naml_history_eye_tracking_{n_classes}_classes.csv")
-    plot_history(naml)
+    naml.history.to_csv(f"results/autoML_classifiers/naml_history_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}.csv")
+    # plot_history(naml)
