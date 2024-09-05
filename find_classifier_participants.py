@@ -3,8 +3,8 @@ import matplotlib
 import pandas as pd
 import naiveautoml
 import logging
-from sklearn.model_selection import train_test_split
 from utils.feature_loader import load_eye_tracking_data, load_eye_tracking_data_tw
+from utils.splitting import leave_one_subject_out_cv
 import matplotlib.pyplot as plt
 
 # for interactive plots
@@ -48,21 +48,30 @@ if __name__ == "__main__":
     label = "duration_estimate"  # "ppot" or "duration_estimate"
     include_meta_label = True
 
-    X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, tw=tw, label_name=[label])
+    X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True,
+                                     include_meta_label=include_meta_label, tw=tw, label_name=[label])
 
-    # preselecting the best subset
-    #X = X[['sub_max_speed_fix', 'sub_mean_dispersion_fix', 'sub_mean_duration_fix', 'sub_mean_speed',
-    #       'sub_min_dispersion_fix', 'sub_min_speed_fix', 'sub_number_clusters_fix']]
+    # Leave one subject out cross-validation
+    splits = leave_one_subject_out_cv(X, y, "participant")
 
-    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
-    y = y.to_numpy().ravel()
+    # select learner
+    for train_idx, test_idx in splits:
+        # print(f"train: {train_idx}")
+        # print(f"test: {test_idx}")
+        print("\n")
+        print("--------------------------------------------------")
+        print(f"train on {y.iloc[train_idx]['participant'].unique()}")
+        print(f"test on {y.iloc[test_idx]['participant'].unique()}")
+        X_train = X.iloc[train_idx].drop(columns=["slice", "slice_fix", "participant", "time", "robot"])
+        y_train = y.iloc[train_idx].drop(columns=["participant", "time", "robot"])
 
-    naml.fit(X, y)
+        y_train = y_train.to_numpy().ravel()
 
-    print("---------------------------------")
-    print(naml.chosen_model)
-    print("---------------------------------")
-    print(naml.history)
+        naml.fit(X_train.values, y_train)
 
-    naml.history.to_csv(f"results/autoML_classifiers/naml_history_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}.csv")
-    # plot_history(naml)
+        print("---------------------------------")
+        print(naml.chosen_model)
+        print("---------------------------------")
+        print(naml.history)
+
+        naml.history.to_csv(f"results/eye_tracking_{n_classes}_classes/autoML_classifiers/naml_history_tw_{tw}_label_{label}_participant_{int(y.iloc[test_idx]['participant'].unique()[0])}.csv")
