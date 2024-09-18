@@ -47,8 +47,10 @@ if __name__ == "__main__":
     tw = 20  # time window in seconds
     label = "duration_estimate"  # "ppot" or "duration_estimate"
     include_meta_label = True
+    bls = True  # baseline subtraction
+    tag = "_bls" if bls else ""
 
-    X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, tw=tw, label_name=[label])
+    X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, tw=tw, label_name=[label], bls=bls)
 
     # preselecting the best subset
     #X = X[['sub_max_speed_fix', 'sub_mean_dispersion_fix', 'sub_mean_duration_fix', 'sub_mean_speed',

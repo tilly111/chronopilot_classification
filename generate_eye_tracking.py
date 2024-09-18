@@ -6,7 +6,7 @@ n_classes = 2
 slicing = "tw"  # time window = "tw", old slicing after minutes = "minutes", no slicing = None
 tw = 60  # time window in seconds
 label = "ppot"  # "ppot" or "duration_estimate"
-include_meta_label = True
+include_meta_label = False # TODO rerun it
 bls = True  # baseline subtraction
 
 if slicing == "minute":

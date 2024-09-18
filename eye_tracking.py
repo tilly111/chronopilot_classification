@@ -72,10 +72,11 @@ if __name__ == '__main__':
     tw = 20  # time window in seconds
     label = "duration_estimate"  # "ppot" or "duration_estimate"
     m_workers = os.cpu_count()
+    save_results = True
     scoring = "accuracy"  # "roc_auc"?
     bls = True  # baseline subtraction
     tag = "_bls" if bls else ""
-    use_shap = True
+    use_shap = False
 
     X_train, y_train = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, tw=tw, label_name=[label], bls=bls)
     X_test, y_test = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, tw=tw,
@@ -148,6 +149,7 @@ if __name__ == '__main__':
     # plt.show()
     pbar = tqdm(total=num_splits)
     shap_values_list = []
+    accuracy_result_frame = pd.DataFrame(columns=["accuracy"] * num_splits)
     with ProcessPoolExecutor(max_workers=m_workers) as executor:
         # for i, (train_index, test_index) in enumerate(sss.split(X, y)):
         for seed in range(num_splits):
@@ -191,8 +193,33 @@ if __name__ == '__main__':
     print(f"Max accuracy: {np.max(acc_list)}")
     print(f"Min accuracy: {np.min(acc_list)}")
     print(f"Confusion matrix: \n{conf_m}")
-
+    accuracy_result_frame.loc[0] = acc_list
+    if save_results:
+        accuracy_result_frame.to_csv(
+            f"results/eye_tracking_{n_classes}_classes/all/accuracy_{label}_tw_{tw}{tag}.csv")
     print(shap_values_list[0])
+
+    if use_shap:
+        shap_values = shap_values_list[0][0]
+        print(type(shap_values))
+        print(shap_values.shape)
+        plt.figure()
+        plt.boxplot(shap_values, labels=X_test.columns)
+        plt.xticks(rotation=90)
+        plt.show()
+        mean = np.mean(shap_values, axis=0)
+        print(mean.shape)
+        # shap.summary_plot(shap_values, X_test, feature_names=X_test.columns)
+        # sv = shap.Explanation(values=shap_values["shap_values"].to_numpy(), feature_names=X_test.columns)
+        # shap.plots.bar(sv, max_display=26, show=True)
+        # shap_values = shap_values.T
+        # shap_values = shap_values.rename(columns={0: "shap_values"})
+        # shap_values = shap_values.sort_values(by="shap_values", ascending=False)
+        # shap_values.to_csv(f"results/shap/{label}_{n_classes}_shap_values{tag}.csv")
+        sv = shap.Explanation(values=mean, feature_names=X_test.columns)
+        # # TODO does not work because shap_values not a explanantion object but a dataframe
+        shap.plots.bar(sv, max_display=26, show=True)
+        plt.show()
 
     # plt.figure()
     # plt.hist(acc_list, label=r'Mean Accuracy (ACC = %0.2f $\pm$ %0.2f)' % (np.mean(acc_list), np.std(acc_list)))

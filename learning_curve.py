@@ -25,7 +25,7 @@ from sklearn.base import clone
 
 from utils.learner_pipeline import get_pipeline_for_features
 
-from utils.feature_loader import load_eye_tracking_data
+from utils.feature_loader import load_eye_tracking_data, load_eye_tracking_data_tw
 
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 
@@ -198,16 +198,25 @@ def get_scores_for_feature_combinations(classifier, data_pre_processor, X, y, ma
 
 if __name__ == '__main__':
     ## select hyperparameters
-    number_trees = 1024
-    n_classes = 3
+    n_classes = 2
+    tw = 20  # time window in seconds
+    label = "duration_estimate"  # "ppot" or "duration_estimate"
+    include_meta_label = True
+    bls = True  # baseline subtraction
+    tag = "_bls" if bls else ""
 
     # load data
-    X, y = load_eye_tracking_data(number_of_classes=n_classes, load_preprocessed=True)
-    # X.drop(columns=["participant", "time", "robot"], inplace=True)  # drop setting information
+    X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, tw=tw, include_meta_label=include_meta_label,label_name=[label], bls=bls)
+    X.drop(columns=["participant", "time", "robot", "slice"], inplace=True)  # drop setting information
+    y.drop(columns=["participant", "time", "robot"], inplace=True)  # drop setting information
+
     max_feature_set_size = X.shape[1]
 
-    learner = ExtraTreesClassifier(n_estimators=number_trees)
-    data_pre_processor = MinMaxScaler()
+    learner = ExtraTreesClassifier(criterion='entropy',
+                                   max_features=0.9197700535609098,
+                                   min_samples_leaf=3, min_samples_split=14,
+                                   n_estimators=512, warm_start=True)
+    data_pre_processor = None
 
     df_auc_results_per_feature_combo = get_scores_for_feature_combinations(
         learner,

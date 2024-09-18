@@ -227,7 +227,7 @@ def load_eye_tracking_data_slice(number_of_classes=2, load_preprocessed=True, la
 def load_eye_tracking_data_tw(number_of_classes=2, load_preprocessed=True, tw=10, label_name=["ppot"],
                                  include_meta_label=False, load_test=False, bls=False) -> tuple[pd.DataFrame, pd.DataFrame]:
     if load_preprocessed:
-        return _load_eye_tracking_data_tw_preprocessed(number_of_classes, tw, label_name, include_meta_label, load_test)
+        return _load_eye_tracking_data_tw_preprocessed(number_of_classes, tw, label_name, include_meta_label, load_test, bls)
 
     if include_meta_label:
         # include meta-data to labels if we want to do analysis with them
