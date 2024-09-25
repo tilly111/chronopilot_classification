@@ -47,7 +47,7 @@ elif platform.system() == "Linux":
 
 
 study = "1"  # "1" or "2"
-block_names = ["exp_T", "exp_TU"]  # "exp_T", "exp_MA", "exp_TU", "exp_PU", "exp_S"
+# block_names = ["exp_PU", "exp_MA"]  # "exp_T", "exp_MA", "exp_TU", "exp_PU", "exp_S"
 background_block_name = "exp_S"  # "baseline"
 classifier_name = "NN"  # "SVC", "DTC", "KNN", "GNB", "LR", "LDA", "RF", "GB", "AB", "XGB", "QDA", "NN"
 use_shap = False
