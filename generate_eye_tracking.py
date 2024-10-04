@@ -2,11 +2,11 @@ import numpy as np
 from utils.feature_loader import load_eye_tracking_data, load_eye_tracking_data_slice, load_eye_tracking_data_tw
 from sklearn.model_selection import train_test_split
 
-n_classes = 2
+n_classes = 3
 slicing = "tw"  # time window = "tw", old slicing after minutes = "minutes", no slicing = None
-tw = 60  # time window in seconds
-label = "ppot"  # "ppot" or "duration_estimate"
-include_meta_label = False # TODO rerun it
+tw = 45  # time window in seconds
+label = "duration_estimate"  # "ppot" or "duration_estimate"
+include_meta_label = True # TODO rerun it
 bls = True  # baseline subtraction
 
 if slicing == "minute":

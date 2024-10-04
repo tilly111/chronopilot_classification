@@ -5,6 +5,7 @@ import shap
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 
 
 def get_pipeline_for_features(classifier, data_pre_processor, X=None, y=None, feature_list=None):
@@ -15,8 +16,20 @@ def get_pipeline_for_features(classifier, data_pre_processor, X=None, y=None, fe
     #     steps.append(("Categorical Encoder", make_column_transformer((OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), attributes_that_require_encoding), remainder="passthrough")))
     if data_pre_processor is not None:
         steps.append(('data-pre-processor', data_pre_processor))
-    steps.append(("Learner", classifier))
+    steps.append(("learner", classifier))
     return Pipeline(steps)
+
+
+def get_pipeline_from_config(config: str, scoring: str, X=None, y=None, feature_list=None):
+    config = pd.read_csv(config)
+    # sort config by accuracy
+    config = config.sort_values(by=scoring, ascending=False)
+    pipeline_config = config["pipeline"].iloc[0]
+    pipeline_config = "from sklearn.pipeline import Pipeline \nfrom sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier \npipe=" + pipeline_config
+    scope = {}
+    exec(pipeline_config, scope)
+    pipe = scope["pipe"]
+    return pipe
 
 
 def fit_classifier(learner, x_train, x_test, y_train, y_test, scoring="accuracy", use_shap=False, n_classes=2):
@@ -58,5 +71,4 @@ def fit_classifier_cf(learner, x_train, x_test, y_train, y_test, scoring="accura
 
     # return accuracy_score(y_test, y_pred), confusion_matrix(y_test, y_pred), pl_interpretable
     return scorer(learner_c, x_test.values, y_test), confusion_matrix(y_test, y_pred), shap_values, learner_c
-
 
