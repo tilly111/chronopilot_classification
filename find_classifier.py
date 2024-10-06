@@ -60,7 +60,10 @@ if __name__ == "__main__":
                     naml = naiveautoml.NaiveAutoML(max_hpo_iterations=1024, show_progress=True, scoring=scoring, max_hpo_iterations_without_imp=100)
 
                     X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, include_meta_label=True, tw=tw, label_name=[label], bls=bls)
-                    X.drop(columns=["robot", "participant", "slice"], inplace=True)
+                    # drop meta data
+                    X.drop(columns=["robot", "participant", "slice", "time"], inplace=True)
+                    # y.drop(columns=["robot", "participant", "time"], inplace=True)
+
                     x_analysis, _, y_analysis, _ = analysis_test_split_tw(X, y)
 
                     y_analysis = y_analysis[label].to_numpy().ravel()
