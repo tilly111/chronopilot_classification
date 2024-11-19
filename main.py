@@ -17,15 +17,15 @@ from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
 import matplotlib.pyplot as plt
 
 
-def fit_classifier_parallel(x_analysis, y_analysis, pl_interpretable, use_shap, i_train, i_validation):
+def fit_classifier_parallel(x_analysis, y_analysis, pl_interpretable, use_shap, i_train, i_validation, n_classes):
     x_train = x_analysis.iloc[i_train]
     y_train = y_analysis.iloc[i_train]
     x_validation = x_analysis.iloc[i_validation]
     y_validation = y_analysis.iloc[i_validation]
 
     trained = clone(pl_interpretable).fit(x_train.values, y_train.values.ravel())
-    y_pred = trained.predict(x_validation)
-    y_pred_proba = trained.predict_proba(x_validation)
+    y_pred = trained.predict(x_validation.values)
+    y_pred_proba = trained.predict_proba(x_validation.values)
 
     if use_shap:
         explainer = shap.KernelExplainer(trained.predict_proba, shap.sample(x_train.values, 50))
@@ -37,7 +37,8 @@ def fit_classifier_parallel(x_analysis, y_analysis, pl_interpretable, use_shap, 
 
         shap_value = shap_value.abs.mean(axis=0).values
 
-    return accuracy_score(y_validation, y_pred), roc_auc_score(y_validation, y_pred_proba[:, 1]), \
+    roc = roc_auc_score(y_validation, y_pred_proba[:, 1]) if n_classes == 2 else 0
+    return accuracy_score(y_validation, y_pred), roc, \
            f1_score(y_validation, y_pred, average='weighted'), trained, shap_value if use_shap else None
 
 
@@ -47,13 +48,14 @@ if __name__ == '__main__':
         pd.set_option('display.max_columns', None)
         pd.set_option('display.max_rows', None)
         plt.rcParams.update({'font.size': 22})
-        dir_path=""
+        dir_path="results/without_histgradient"
     elif platform.system() == "Linux":
+        dir_path="results"
         matplotlib.use('TkAgg')
 
     # # params to choose
     n_classes = 2
-    tw = 2  # time window in seconds
+    tw = 60  # time window in seconds
     label = "duration_estimate"  # "ppot" or "duration_estimate"
     scoring = "accuracy"  # "roc_auc"?
     use_shap = False
@@ -61,7 +63,7 @@ if __name__ == '__main__':
     tag = "_bls" if bls else ""
     number_of_repeats = 100
 
-    config = f"{dir_path}results/without_histgradient/eye_tracking_{n_classes}_classes/autoML_classifiers/{scoring}_naml_history_tw_{tw}_label_{label}_bls.csv"
+    config = f"{dir_path}/eye_tracking_{n_classes}_classes/autoML_classifiers/{scoring}_naml_history_tw_{tw}_label_{label}_bls.csv"
     # sort config by accuracy
     # config = config.sort_values(by="accuracy", ascending=False)
     # pipeline_config = config["pipeline"].iloc[0]
@@ -88,14 +90,7 @@ if __name__ == '__main__':
     futures = []
     cv = StratifiedShuffleSplit(n_splits=number_of_repeats)
     with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
-        # for i_train, i_validation in cv.split(x_analysis, y_analysis):
-        #
-        #     futures.append(executor.submit(
-        #         fit_classifier, x_analysis, y_analysis, pl_interpretable, use_shap, i_train, i_validation
-        #          )
-        #     )
-
-        futures = [executor.submit(fit_classifier_parallel, x_analysis, y_analysis, pl_interpretable, use_shap, i_train, i_validation) for i_train, i_validation in cv.split(x_analysis, y_analysis)]
+        futures = [executor.submit(fit_classifier_parallel, x_analysis, y_analysis, pl_interpretable, use_shap, i_train, i_validation, n_classes) for i_train, i_validation in cv.split(x_analysis, y_analysis)]
 
         def _cb(future):
             pbar.update(1)
@@ -125,13 +120,19 @@ if __name__ == '__main__':
     print(f"mean F1-score: {np.mean(f1_all)}")
 
     test_accs = []
+    test_rocs = []
     for c in classifier_all:
-        test_acc = accuracy_score(y_test, c.predict(x_test))
+        #if n_classes == 2:
+        test_roc = roc_auc_score(y_test, c.predict_proba(x_test.values)[:, 1]) if n_classes == 2 else 0
+        test_rocs.append(test_roc)
+        print(f"test ROC AUC: {test_roc:.4f}")
+        test_acc = accuracy_score(y_test, c.predict(x_test.values))
         test_accs.append(test_acc)
         print(f"test accuracy: {test_acc}")
     print(f"mean test accuracy: {np.mean(test_accs):.4f} $\pm$ {np.std(test_accs):.4f}")
+    print(f"mean test ROC AUC: {np.mean(test_rocs):.4f} $\pm$ {np.std(test_rocs):.4f}")
 
-    save_frame = pd.DataFrame(data={"accuracy": acc_all, "roc_auc": roc_all, "f1_score": f1_all, "test_accuracy": test_accs})
+    save_frame = pd.DataFrame(data={"accuracy": acc_all, "roc_auc": roc_all, "f1_score": f1_all, "test_accuracy": test_accs, "test_roc_auc": test_rocs})
     save_frame.to_csv(f"results/eye_tracking_{n_classes}_classes/all/metrics_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{tag}_{number_of_repeats}.csv")
 
 
