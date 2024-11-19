@@ -1,63 +1,47 @@
 import platform
-import constants
+import sys
+
 import os
 import json
 from tqdm import tqdm
 
 import pandas as pd
 import numpy as np
-from datetime import timedelta, datetime
 import matplotlib
 import matplotlib.pyplot as plt
-from itertools import compress
 
-from sklearn.svm import SVC
-from sklearn.tree import DecisionTreeClassifier, plot_tree
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
-from sklearn.feature_selection import RFECV, SequentialFeatureSelector, RFE
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, roc_curve, auc, roc_auc_score
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
-from sklearn.metrics import auc, get_scorer
+from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import get_scorer
 from sklearn.base import clone
 
-from utils.learner_pipeline import get_pipeline_for_features
+from utils.learner_pipeline import get_pipeline_from_config
+from utils.splitting import analysis_test_split_tw
+from utils.feature_loader import load_eye_tracking_data_tw
 
-from utils.feature_loader import load_eye_tracking_data, load_eye_tracking_data_tw
-
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 
-# for interactive plots
-if platform.system() == "Darwin":
-    matplotlib.use('QtAgg')
-    pd.set_option('display.max_columns', None)
-    plt.rcParams.update({'font.size': 20})
-    pd.set_option('display.max_rows', None)
-elif platform.system() == "Linux":
-    matplotlib.use('TkAgg')
-elif platform.system() == "Windows":
-    # TODO
-    pass
-
-def get_learning_curve(learner, X, y, seed, schedule, n_classes):
+def get_learning_curve(learner, X, y, seed, schedule, n_classes, scoring="roc_auc"):
     auc_train = []
     auc_val = []
     for i, a in enumerate(schedule):
         X_train, X_val, y_train, y_val = train_test_split(X, y, train_size=a, stratify=y, random_state=seed)
         l_copy = clone(learner)
-        l_copy.fit(X_train, y_train.values.ravel())
-        if n_classes == 2:
-            auc_train.append(roc_auc_score(y_train, l_copy.predict_proba(X_train)[:, 1]))
-            auc_val.append(roc_auc_score(y_val, l_copy.predict_proba(X_val)[:, 1]))
+        l_copy.fit(X_train, y_train)
+        if scoring == "accuracy":
+            auc_train.append(accuracy_score(y_train, l_copy.predict(X_train)))
+            auc_val.append(accuracy_score(y_val, l_copy.predict(X_val)))
         else:
-            auc_train.append(roc_auc_score(y_train, l_copy.predict_proba(X_train), multi_class="ovr", average='macro'))
-            auc_val.append(roc_auc_score(y_val, l_copy.predict_proba(X_val), multi_class="ovr", average='macro'))
+            if n_classes == 2:
+                auc_train.append(roc_auc_score(y_train, l_copy.predict_proba(X_train)[:, 1]))
+                auc_val.append(roc_auc_score(y_val, l_copy.predict_proba(X_val)[:, 1]))
+            else:
+                auc_train.append(roc_auc_score(y_train, l_copy.predict_proba(X_train), multi_class="ovr", average='macro'))
+                auc_val.append(roc_auc_score(y_val, l_copy.predict_proba(X_val), multi_class="ovr", average='macro'))
     return auc_train, auc_val
 
-def get_learning_curves(learner, X, y, repeats, n_classes, first_anchor=0.1, last_anchor=0.8, steps=10, filename=None):
+def get_learning_curves(learner, X, y, repeats, n_classes, first_anchor=0.1, last_anchor=0.8, steps=10, filename=None, scoring="roc_auc"):
     schedule = np.linspace(first_anchor, last_anchor, steps)
 
     if filename is None or not os.path.isfile(filename):
@@ -80,7 +64,8 @@ def get_learning_curves(learner, X, y, repeats, n_classes, first_anchor=0.1, las
                          y,
                          seed,
                          schedule,
-                         n_classes
+                         n_classes,
+                         scoring
                      )
                      )
                 )
@@ -109,24 +94,22 @@ def get_learning_curves(learner, X, y, repeats, n_classes, first_anchor=0.1, las
     return lcs
 
 # does the fitting of the model and returns the score
-def get_score_for_features(classifier, data_pre_processor, X, y, feature_list, repeats, n_classes):
+def get_score_for_features(classifier, X, y, feature_list, repeats, scoring):
     X_red = X[feature_list]
-    pl_interpretable = get_pipeline_for_features(classifier, data_pre_processor)
-    if n_classes == 2:
-        scorer = get_scorer("roc_auc")
-    else:
-        scorer = get_scorer("roc_auc_ovr")
+    pl_interpretable = classifier
+    scorer = get_scorer(scoring)
 
     results = []
     for seed in range(repeats):
+        # print(f"Seed: {seed}")
         X_train, X_val, y_train, y_val = train_test_split(X_red, y, stratify=y, train_size=0.8, random_state=seed)
-        l = clone(pl_interpretable).fit(X_train, y_train.values.ravel())
+        l = clone(pl_interpretable).fit(X_train, y_train)
         results.append(scorer(l, X_val, y_val))
     return results
 
 # schedules getting the scores for the feature combinations
-def get_scores_for_feature_combinations_based_on_previous_selections(classifier, data_pre_processor, X, y, repeats_per_size, df_last_stage,
-                                                                     num_combos_from_last_stage, n_classes):
+def get_scores_for_feature_combinations_based_on_previous_selections(classifier, X, y, repeats_per_size, df_last_stage,
+                                                                     num_combos_from_last_stage, scoring):
     if df_last_stage is None:
         combos_for_k = [[c] for c in X.columns]
     else:
@@ -147,7 +130,7 @@ def get_scores_for_feature_combinations_based_on_previous_selections(classifier,
 
         # Submit tasks to the executor
         futures = [
-            executor.submit(get_score_for_features, classifier, data_pre_processor, X, y, combo, repeats_per_size[len(combo)], n_classes)
+            executor.submit(get_score_for_features, classifier, X, y, combo, repeats_per_size[len(combo)], scoring)
             for combo in combos_for_k
         ]
 
@@ -171,13 +154,15 @@ def get_scores_for_feature_combinations_based_on_previous_selections(classifier,
     return pd.DataFrame(rows, columns=["combo", "scores", "score_mean"]).sort_values("score_mean", ascending=False)
 
 
-def get_scores_for_feature_combinations(classifier, data_pre_processor, X, y, max_size, repeats_per_size, num_combos_from_last_stage, n_classes):
+def get_scores_for_feature_combinations(classifier, X, y, max_size, dir_path, repeats_per_size, num_combos_from_last_stage,
+                                        scoring, tw, label):
     dfs = {}
 
     for k in range(1, max_size + 1):
 
-        path = f"results/eye_tracking_{n_classes}_classes/feature_combinations/feature_selection_results_{k}.csv"
+        path = f"{dir_path}results/eye_tracking_{n_classes}_classes/feature_combinations/{scoring}_tw_{tw}_{label}_feature_selection_results_{k}.csv"
         if os.path.isfile(path):
+            print(f"Loading {path}...")
             dfs[k] = pd.read_csv(path)
             dfs[k]["combo"] = [json.loads(e.replace("'", '"')) for e in dfs[k]["combo"]]
             dfs[k]["scores"] = [json.loads(e) for e in dfs[k]["scores"]]
@@ -188,45 +173,67 @@ def get_scores_for_feature_combinations(classifier, data_pre_processor, X, y, ma
                 df_for_last_k = None
             if k > 1:
                 df_for_last_k = dfs[k - 1]  # .drop(columns=attributes_excluded_in_multivar_importance)
-            dfs[k] = get_scores_for_feature_combinations_based_on_previous_selections(classifier, data_pre_processor, X, y,
+            dfs[k] = get_scores_for_feature_combinations_based_on_previous_selections(classifier, X, y,
                                                                                       repeats_per_size, df_for_last_k,
                                                                                       num_combos_from_last_stage[
-                                                                                          k] if k > 1 else 0, n_classes)
+                                                                                          k] if k > 1 else 0, scoring)
         dfs[k].to_csv(path, index=False)
     return dfs
 
 
 if __name__ == '__main__':
+    # os specific settings
+    plot_flag = False
+    if platform.system() == "Darwin":
+        matplotlib.use('QtAgg')
+        pd.set_option('display.max_columns', None)
+        plt.rcParams.update({'font.size': 20})
+        pd.set_option('display.max_rows', None)
+        plot_flag = True
+        dir_path = "/Users/tillaust/PycharmProjects/chronopilot_classification/"
+    else:  # on server without display
+        dir_path = "/abyss/home/code/chronopilot_classification/"
+
     ## select hyperparameters
-    n_classes = 2
-    tw = 20  # time window in seconds
-    label = "duration_estimate"  # "ppot" or "duration_estimate"
+    # n_classes tw label scoring; example: 2 20 duration_estimation accuracy
+    pod_id = sys.argv[1]
+    n_classes = int(sys.argv[2])
+    tw = int(sys.argv[3])
+    label = str(sys.argv[4])
+    scoring = str(sys.argv[5])
+    print(f"current configuration: {n_classes} classes, {tw} seconds, {label}, {scoring}")
+
     include_meta_label = True
     bls = True  # baseline subtraction
     tag = "_bls" if bls else ""
 
     # load data
-    X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, tw=tw, include_meta_label=include_meta_label,label_name=[label], bls=bls)
-    X.drop(columns=["participant", "time", "robot", "slice"], inplace=True)  # drop setting information
-    y.drop(columns=["participant", "time", "robot"], inplace=True)  # drop setting information
+    X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, include_meta_label=True,
+                                     tw=tw, label_name=[label], bls=bls, dir=dir_path)
+    # drop meta data
+    X.drop(columns=["robot", "participant", "slice", "time"], inplace=True)
+    # y.drop(columns=["robot", "participant", "time"], inplace=True)
+
+    x_analysis, _, y_analysis, _ = analysis_test_split_tw(X, y)
+
+    y_analysis = y_analysis[label].to_numpy().ravel()
 
     max_feature_set_size = X.shape[1]
 
-    learner = ExtraTreesClassifier(criterion='entropy',
-                                   max_features=0.9197700535609098,
-                                   min_samples_leaf=3, min_samples_split=14,
-                                   n_estimators=512, warm_start=True)
-    data_pre_processor = None
-
+    # select learner
+    pl_interpretable = get_pipeline_from_config(f"{dir_path}results/eye_tracking_{n_classes}_classes/autoML_classifiers/{scoring}_naml_history_tw_{tw}_label_{label}{tag}.csv", scoring)
+    print(pl_interpretable)
     df_auc_results_per_feature_combo = get_scores_for_feature_combinations(
-        learner,
-        data_pre_processor,
-        X,
-        y,
+        pl_interpretable,
+        x_analysis,
+        y_analysis,
         max_feature_set_size,
-        repeats_per_size={i: 5 for i in range(1, max_feature_set_size + 1)},
-        num_combos_from_last_stage={i: 10 if i < 30 else (5 if i < 50 else 2) for i in range(2, max_feature_set_size + 1)},
-        n_classes=n_classes
+        dir_path,
+        repeats_per_size={i: 100 for i in range(1, max_feature_set_size + 1)},
+        num_combos_from_last_stage={i: 10 if i < 40 else (5 if i < 50 else 2) for i in range(2, max_feature_set_size + 1)},
+        scoring=scoring,
+        tw=tw,
+        label=label
     )
 
     k_s = list(range(1, len(df_auc_results_per_feature_combo) + 1))
@@ -235,34 +242,27 @@ if __name__ == '__main__':
     print(f"shape: {len(df_auc_results_per_feature_combo)}")
 
     for k in k_s:
-        # print(k)
         df_fs = df_auc_results_per_feature_combo[k]
-        # print(df_fs.iloc[0])
-        # TODO why is this so????
-        try:
-            best_scores_per_k.append(df_fs.iloc[0]["scores"])
-            best_combos_per_k.append(df_fs.iloc[0]["combo"])
-        except:
-            print("No best combo for k", k)
-            best_scores_per_k.append([])
-            best_combos_per_k.append([])
+        best_scores_per_k.append(df_fs.iloc[0]["scores"])
+        best_combos_per_k.append(df_fs.iloc[0]["combo"])
         print(k, np.mean(best_scores_per_k[-1]), np.std(best_scores_per_k[-1]))
 
-    # plot best combos
-    fig, ax = plt.subplots(figsize=(10, 3))
-    mu = np.array([np.mean(v) for v in best_scores_per_k])
-    std = np.array([np.std(v) for v in best_scores_per_k])
-    print(std)
-    ax.plot(k_s, mu)
-    ax.fill_between(k_s, mu - std, mu + std, alpha=0.2)
-    for k, combo, score in zip(k_s, best_combos_per_k, mu):
-        print("Chosen feature combinations for", k, score, str(combo))  # , rotation=90)
-    ax.set_xlabel("Number of Features")
-    ax.set_ylabel("AUC ROC")
-    # ax.set_ylim([0.6, 0.8])
-    ax.axhline(max(mu), color="black", linestyle="--")
-    plt.savefig(f"plots/eye_tracking_analysis/feature_selection_{n_classes}_classes.pdf", bbox_inches="tight", pad_inches=0)
-    # plt.show()
+    if plot_flag:
+        # plot best combos
+        fig, ax = plt.subplots(figsize=(10, 3))
+        mu = np.array([np.mean(v) for v in best_scores_per_k])
+        std = np.array([np.std(v) for v in best_scores_per_k])
+        print(std)
+        ax.plot(k_s, mu)
+        ax.fill_between(k_s, mu - std, mu + std, alpha=0.2)
+        for k, combo, score in zip(k_s, best_combos_per_k, mu):
+            print("Chosen feature combinations for", k, score, str(combo))  # , rotation=90)
+        ax.set_xlabel("Number of Features")
+        ax.set_ylabel("AUC ROC")
+        # ax.set_ylim([0.6, 0.8])
+        ax.axhline(max(mu), color="black", linestyle="--")
+        # plt.savefig(f"plots/eye_tracking_analysis/feature_selection_{n_classes}_classes.pdf", bbox_inches="tight", pad_inches=0)
+        plt.show()
 
 
     ks_for_lcs = range(1, max_feature_set_size + 1)
@@ -270,36 +270,38 @@ if __name__ == '__main__':
     lcs = {}  # learning classifier system for each k
     for k in ks_for_lcs:
         combo = best_combos_per_k[k-1]
-        lc_file = f"results/eye_tracking_{n_classes}_classes/lcs/lcs_{k}.csv"
+        lc_file = f"{dir_path}results/eye_tracking_{n_classes}_classes/lcs/{scoring}_tw_{tw}_{label}{tag}_lcs_{k}.csv"
         print(f"Get curves for {k} features with combo {combo}.")
         lcs[k] = get_learning_curves(
-            learner=get_pipeline_for_features(learner, data_pre_processor),
-            X=X[combo],
-            y=y,
+            learner=pl_interpretable,
+            X=x_analysis[combo],
+            y=y_analysis,
             repeats=500,
             n_classes=n_classes,
             first_anchor=0.05,
             last_anchor=0.9,
             steps=10,
-            filename=lc_file
+            filename=lc_file,
+            scoring=scoring
         )
     # plot learning curves
-    fig, ax = plt.subplots(figsize=(16, 6))
-    # ax.plot(schedule, lc[0].mean(axis=1), label="train AUC")
-    for k in [7, 8, 9, 10, 11, 12]:  # , 4, 8, 16]:  # TODO adjust here
-        schedule, lc = [float(v) for v in lcs[k].columns], lcs[k].values
-        mu = lc.mean(axis=0)
-        std = lc.std(axis=0)
-        ax.plot(schedule, mu, label=f"{k} features")
-        ax.fill_between(schedule, mu - std, mu + std, alpha=0.3)
-    ax.set_title(f"Learning Curves for Validation AUROC")
-    ax.legend()
-    ax.set_xlim([0, 1.6])
-    ax.set_ylabel("AUC ROC")
-    # ax.set_ylim([0.45,0.8])
-    ax.axhline(0.725, color="blue", linestyle="--")
-    ax.axhline(0.5, color="red", linestyle="--")
-    plt.savefig(f"plots/eye_tracking_analysis/learning_curves_{n_classes}_classes.pdf", bbox_inches="tight",
-                pad_inches=0)
-    plt.show()
+    if plot_flag:
+        fig, ax = plt.subplots(figsize=(16, 6))
+        # ax.plot(schedule, lc[0].mean(axis=1), label="train AUC")
+        for k in [7, 8, 9, 10, 11, 12]:  # , 4, 8, 16]:  # TODO adjust here
+            schedule, lc = [float(v) for v in lcs[k].columns], lcs[k].values
+            mu = lc.mean(axis=0)
+            std = lc.std(axis=0)
+            ax.plot(schedule, mu, label=f"{k} features")
+            ax.fill_between(schedule, mu - std, mu + std, alpha=0.3)
+        ax.set_title(f"Learning Curves for Validation ROC AUC")
+        ax.legend()
+        ax.set_xlim([0, 1.6])
+        ax.set_ylabel("AUC ROC")
+        # ax.set_ylim([0.45,0.8])
+        ax.axhline(0.725, color="blue", linestyle="--")
+        ax.axhline(0.5, color="red", linestyle="--")
+        # plt.savefig(f"plots/eye_tracking_analysis/learning_curves_{n_classes}_classes.pdf", bbox_inches="tight",
+        #             pad_inches=0)
+        plt.show()
 

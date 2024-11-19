@@ -225,9 +225,9 @@ def load_eye_tracking_data_slice(number_of_classes=2, load_preprocessed=True, la
     return data_2, y_all
 
 def load_eye_tracking_data_tw(number_of_classes=2, load_preprocessed=True, tw=10, label_name=["ppot"],
-                                 include_meta_label=False, load_test=False, bls=False) -> tuple[pd.DataFrame, pd.DataFrame]:
+                                 include_meta_label=False, load_test=False, bls=False, dir="") -> tuple[pd.DataFrame, pd.DataFrame]:
     if load_preprocessed:
-        return _load_eye_tracking_data_tw_preprocessed(number_of_classes, tw, label_name, include_meta_label, load_test, bls)
+        return _load_eye_tracking_data_tw_preprocessed(number_of_classes, tw, label_name, include_meta_label, load_test, bls, dir)
 
     if include_meta_label:
         # include meta-data to labels if we want to do analysis with them
@@ -305,7 +305,7 @@ def load_eye_tracking_data_tw(number_of_classes=2, load_preprocessed=True, tw=10
     return all_features, y_all
 
 
-def _load_eye_tracking_data_tw_preprocessed(number_of_classes, tw, label_name, include_meta_label, load_test, bls=False) -> tuple[pd.DataFrame, pd.DataFrame]:
+def _load_eye_tracking_data_tw_preprocessed(number_of_classes, tw, label_name, include_meta_label, load_test, bls=False, dir="") -> tuple[pd.DataFrame, pd.DataFrame]:
     if bls:
         tag = "_bls"
     else:
@@ -326,11 +326,12 @@ def _load_eye_tracking_data_tw_preprocessed(number_of_classes, tw, label_name, i
     elif include_meta_label:
         print("Loading data with meta data")
         if number_of_classes == 2:
-            X = pd.read_csv(f"preprocessed_data/eye_tracking_2_classes/X_tw_{tw}_label_{label_name[0]}_withMetaData{tag}.csv")
-            y = pd.read_csv(f"preprocessed_data/eye_tracking_2_classes/y_tw_{tw}_label_{label_name[0]}_withMetaData{tag}.csv")
+            print(f"{dir}preprocessed_data/eye_tracking_2_classes/X_tw_{tw}_label_{label_name[0]}_withMetaData{tag}.csv")
+            X = pd.read_csv(f"{dir}preprocessed_data/eye_tracking_2_classes/X_tw_{tw}_label_{label_name[0]}_withMetaData{tag}.csv")
+            y = pd.read_csv(f"{dir}preprocessed_data/eye_tracking_2_classes/y_tw_{tw}_label_{label_name[0]}_withMetaData{tag}.csv")
         elif number_of_classes == 3:
-            X = pd.read_csv(f"preprocessed_data/eye_tracking_3_classes/X_tw_{tw}_label_{label_name[0]}_withMetaData{tag}.csv")
-            y = pd.read_csv(f"preprocessed_data/eye_tracking_3_classes/y_tw_{tw}_label_{label_name[0]}_withMetaData{tag}.csv")
+            X = pd.read_csv(f"{dir}preprocessed_data/eye_tracking_3_classes/X_tw_{tw}_label_{label_name[0]}_withMetaData{tag}.csv")
+            y = pd.read_csv(f"{dir}preprocessed_data/eye_tracking_3_classes/y_tw_{tw}_label_{label_name[0]}_withMetaData{tag}.csv")
         else:
             print("Number of classes not preprocessed")
             X = None
@@ -350,3 +351,23 @@ def _load_eye_tracking_data_tw_preprocessed(number_of_classes, tw, label_name, i
             y_train = None
 
         return X_train, y_train
+
+
+def load_eye_tracking_data_baseline() -> pd.DataFrame:
+    df_pupil = pd.read_csv(f"/Volumes/Data/chronopilot/Julia_study/features/all_exp_pupil_features_baseline.csv")
+    df_fixation = pd.read_csv(
+        f"/Volumes/Data/chronopilot/Julia_study/features/all_exp_fixations_features_baseline.csv")
+    df_fixation.columns = [f"{col}_fix" for col in df_fixation.columns]
+    df_fixation = df_fixation.rename(
+        columns={'time_fix': 'time', 'robot_fix': 'robot', 'participant_fix': 'participant', 'slice_fix': 'slice'})
+
+    print(df_pupil.shape, df_fixation.shape)
+
+    all_features = pd.merge(df_pupil, df_fixation, on=['time', 'robot', 'participant', 'slice'], how='inner')
+    print(all_features.shape)
+
+    all_features.replace([np.inf, -np.inf], np.nan, inplace=True)
+    all_features.dropna(inplace=True)
+    print(all_features.shape)
+
+    return all_features

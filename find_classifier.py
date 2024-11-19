@@ -1,7 +1,5 @@
 import os
-
 from sklearn.ensemble import HistGradientBoostingClassifier
-
 import platform
 from tqdm import tqdm
 import matplotlib
@@ -93,7 +91,6 @@ if __name__ == "__main__":
         # Attach the callback to each future
         def _cb(future):
             pbar.update(1)
-
 
     #for n_classes in [2, 3]:
     #    for label in ["duration_estimate", "ppot"]:

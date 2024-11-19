@@ -25,7 +25,18 @@ def get_pipeline_from_config(config: str, scoring: str, X=None, y=None, feature_
     # sort config by accuracy
     config = config.sort_values(by=scoring, ascending=False)
     pipeline_config = config["pipeline"].iloc[0]
-    pipeline_config = "from sklearn.pipeline import Pipeline \nfrom sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier \npipe=" + pipeline_config
+    pipeline_config = "from sklearn.pipeline import Pipeline \n" \
+                      "from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, HistGradientBoostingClassifier \n" \
+                      "from sklearn.neural_network import MLPClassifier \n" \
+                      "from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis \n" \
+                      "from sklearn.svm import SVC \n" \
+                      "from sklearn.tree import DecisionTreeClassifier \n" \
+                      "from sklearn.feature_selection import VarianceThreshold \n" \
+                      "from sklearn.neighbors import KNeighborsClassifier \n" \
+                      "from sklearn.decomposition import PCA \n" \
+                      "from sklearn.preprocessing import OrdinalEncoder, PowerTransformer, QuantileTransformer, MinMaxScaler \n" \
+                      "from sklearn.preprocessing import Normalizer, PolynomialFeatures \n" \
+                      "pipe=" + pipeline_config
     scope = {}
     exec(pipeline_config, scope)
     pipe = scope["pipe"]

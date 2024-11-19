@@ -10,7 +10,7 @@ from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, roc_auc_
 import shap
 
 from utils.feature_loader import load_eye_tracking_data_tw
-from utils.splitting import train_test_split_tw
+from utils.splitting import train_test_split_tw, analysis_test_split_tw
 from utils.learner_pipeline import fit_classifier, get_pipeline_for_features, fit_classifier_cf, get_pipeline_from_config
 from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
 
@@ -38,7 +38,7 @@ def fit_classifier_parallel(x_analysis, y_analysis, pl_interpretable, use_shap, 
         shap_value = shap_value.abs.mean(axis=0).values
 
     return accuracy_score(y_validation, y_pred), roc_auc_score(y_validation, y_pred_proba[:, 1]), \
-           f1_score(y_validation, y_pred, average='weighted'), shap_value if use_shap else None
+           f1_score(y_validation, y_pred, average='weighted'), trained, shap_value if use_shap else None
 
 
 if __name__ == '__main__':
@@ -47,20 +47,21 @@ if __name__ == '__main__':
         pd.set_option('display.max_columns', None)
         pd.set_option('display.max_rows', None)
         plt.rcParams.update({'font.size': 22})
+        dir_path=""
     elif platform.system() == "Linux":
         matplotlib.use('TkAgg')
 
     # # params to choose
     n_classes = 2
-    tw = 20  # time window in seconds
+    tw = 2  # time window in seconds
     label = "duration_estimate"  # "ppot" or "duration_estimate"
     scoring = "accuracy"  # "roc_auc"?
-    use_shap = True
+    use_shap = False
     bls = True  # baseline subtraction
     tag = "_bls" if bls else ""
-    number_of_repeats = 2
+    number_of_repeats = 100
 
-    config = f"results/eye_tracking_{n_classes}_classes/autoML_classifiers/naml_history_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}.csv"
+    config = f"{dir_path}results/without_histgradient/eye_tracking_{n_classes}_classes/autoML_classifiers/{scoring}_naml_history_tw_{tw}_label_{label}_bls.csv"
     # sort config by accuracy
     # config = config.sort_values(by="accuracy", ascending=False)
     # pipeline_config = config["pipeline"].iloc[0]
@@ -69,9 +70,11 @@ if __name__ == '__main__':
     print(pl_interpretable)
     X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, include_meta_label=True,
                                      tw=tw, label_name=[label], bls=bls)
-    x_analysis, _, y_analysis, _ = train_test_split_tw(X, y)
+    x_analysis, x_test, y_analysis, y_test = analysis_test_split_tw(X, y)
     x_analysis.drop(columns=["slice", "participant", "time", "robot"], inplace=True)
     y_analysis.drop(columns=["participant", "time", "robot"], inplace=True)
+    x_test.drop(columns=["slice", "participant", "time", "robot"], inplace=True)
+    y_test.drop(columns=["participant", "time", "robot"], inplace=True)
 
     if use_shap:
         shap_values = pd.DataFrame(data=np.zeros((1, len(x_analysis.columns))), columns=x_analysis.columns)
@@ -80,6 +83,7 @@ if __name__ == '__main__':
     acc_all = []
     roc_all = []
     f1_all = []
+    classifier_all = []
     pbar = tqdm(total=number_of_repeats)
     futures = []
     cv = StratifiedShuffleSplit(n_splits=number_of_repeats)
@@ -107,11 +111,12 @@ if __name__ == '__main__':
     pbar.close()
 
     for i, future in enumerate(futures):
-        acc, roc, f1, shap_value = future.result()
+        acc, roc, f1, classifier, shap_value = future.result()
 
         acc_all.append(acc)
         roc_all.append(roc)
         f1_all.append(f1)
+        classifier_all.append(classifier)
         if use_shap:
             shap_values.loc[i] = shap_value
 
@@ -119,8 +124,16 @@ if __name__ == '__main__':
     print(f"mean ROC AUC: {np.mean(roc_all):.4f} $\pm$ {np.std(roc_all):.4f}")
     print(f"mean F1-score: {np.mean(f1_all)}")
 
-    save_frame = pd.DataFrame(data={"accuracy": acc_all, "roc_auc": roc_all, "f1_score": f1_all})
+    test_accs = []
+    for c in classifier_all:
+        test_acc = accuracy_score(y_test, c.predict(x_test))
+        test_accs.append(test_acc)
+        print(f"test accuracy: {test_acc}")
+    print(f"mean test accuracy: {np.mean(test_accs):.4f} $\pm$ {np.std(test_accs):.4f}")
+
+    save_frame = pd.DataFrame(data={"accuracy": acc_all, "roc_auc": roc_all, "f1_score": f1_all, "test_accuracy": test_accs})
     save_frame.to_csv(f"results/eye_tracking_{n_classes}_classes/all/metrics_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{tag}_{number_of_repeats}.csv")
+
 
     if use_shap:
         shap_values = shap_values / number_of_repeats
