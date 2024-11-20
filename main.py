@@ -29,19 +29,19 @@ def fit_classifier_parallel(x_analysis, y_analysis, pl_interpretable, use_shap, 
     y_pred = trained.predict(x_validation.values)
     y_pred_proba = trained.predict_proba(x_validation.values)
 
-    if use_shap:
-        explainer = shap.KernelExplainer(trained.predict_proba, shap.sample(x_train.values, 50))
-        shap_value = explainer(x_train.iloc[0:33])  # TODO: shouldnt we use x_validation here?
-
-        # returns probability for class 0 and 1, but we only need one bc p = 1 - p
-        shap_value.values = shap_value.values[:, :, 1]
-        shap_value.base_values = shap_value.base_values[:, 1]
-
-        shap_value = shap_value.abs.mean(axis=0).values
+    # if use_shap:
+    #     explainer = shap.KernelExplainer(trained.predict_proba, shap.sample(x_train.values, 50))
+    #     shap_value = explainer(x_train.iloc[0:33])  # TODO: shouldnt we use x_validation here?
+    #
+    #     # returns probability for class 0 and 1, but we only need one bc p = 1 - p
+    #     shap_value.values = shap_value.values[:, :, 1]
+    #     shap_value.base_values = shap_value.base_values[:, 1]
+    #
+    #     shap_value = shap_value.abs.mean(axis=0).values
 
     roc = roc_auc_score(y_validation, y_pred_proba[:, 1]) if n_classes == 2 else 0
     return accuracy_score(y_validation, y_pred), roc, \
-           f1_score(y_validation, y_pred, average='weighted'), trained, shap_value if use_shap else None
+           f1_score(y_validation, y_pred, average='weighted'), trained, None  # shap_value if use_shap else None
 
 
 if __name__ == '__main__':
@@ -60,10 +60,10 @@ if __name__ == '__main__':
     tw = int(sys.argv[2])  # time window in seconds
     label = str(sys.argv[4])  # "ppot" or "duration_estimate"
     scoring = str(sys.argv[3])  # "roc_auc"?
-    use_shap = False
+    use_shap = True
     bls = True  # baseline subtraction
     tag = "_bls" if bls else ""
-    number_of_repeats = 100
+    number_of_repeats = 5
 
     print(f"setting: {n_classes}, {tw}, {scoring}, {label}")
     config = f"{dir_path}/eye_tracking_{n_classes}_classes/autoML_classifiers/{scoring}_naml_history_tw_{tw}_label_{label}_bls.csv"
@@ -136,14 +136,22 @@ if __name__ == '__main__':
     #print(f"mean test ROC AUC: {np.mean(test_rocs):.4f} $\pm$ {np.std(test_rocs):.4f}")
 
     save_frame = pd.DataFrame(data={"accuracy": acc_all, "roc_auc": roc_all, "f1_score": f1_all, "test_accuracy": test_accs, "test_roc_auc": test_rocs})
-    save_frame.to_csv(f"results/eye_tracking_{n_classes}_classes/all/metrics_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{tag}_{number_of_repeats}.csv")
+    # save_frame.to_csv(f"results/eye_tracking_{n_classes}_classes/all/metrics_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{tag}_{number_of_repeats}.csv")
 
 
     if use_shap:
-        shap_values = shap_values / number_of_repeats
-        shap_values = shap_values.T
-        shap_values["mean"] = shap_values.mean(axis=1)
-        # shap_values = shap_values.rename(columns={0: "shap_values"})
-        shap_values = shap_values.sort_values(by="mean", ascending=False)
-        print(shap_values)
-        shap_values.to_csv(f"results/eye_tracking_{n_classes}_classes/shap/shap_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{number_of_repeats}.csv")
+        #
+        for clf in classifier_all:
+            # explainer = shap.Explainer(clf)
+            explainer = shap.KernelExplainer(clf.predict_proba, shap.sample(x_analysis.values, 200))  # x_analysis.values
+            shap_values = explainer.shap_values(x_test)
+            # shap.summary_plot(shap_values, x_test)
+            shap.summary_plot(shap_values[0], x_test)  # Display the summary_plot of the label “0”.
+            plt.show()
+        # shap_values = shap_values / number_of_repeats
+        # shap_values = shap_values.T
+        # shap_values["mean"] = shap_values.mean(axis=1)
+        # # shap_values = shap_values.rename(columns={0: "shap_values"})
+        # shap_values = shap_values.sort_values(by="mean", ascending=False)
+        # print(shap_values)
+        # shap_values.to_csv(f"results/eye_tracking_{n_classes}_classes/shap/shap_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{number_of_repeats}.csv")
