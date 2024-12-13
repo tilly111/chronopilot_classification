@@ -19,3 +19,4 @@ copy_to_cluster.sh
 plot*
 sandbox.py
 /classifier
+server/
