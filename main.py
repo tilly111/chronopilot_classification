@@ -70,11 +70,15 @@ if __name__ == '__main__':
     workers = os.cpu_count()
 
     print(f"setting: {n_classes}, {tw}, {scoring}, {label}")
-    config = f"{dir_path}/eye_tracking_{n_classes}_classes/autoML_classifiers/{scoring}_naml_history_tw_{tw}_label_{label}_bls.csv"
+    if n_classes == 3 and scoring == 'roc_auc':
+        scoring_load = "accuracy"
+    else:
+        scoring_load = scoring
+    config = f"{dir_path}/eye_tracking_{n_classes}_classes/autoML_classifiers/{scoring_load}_naml_history_tw_{tw}_label_{label}_bls.csv"
     # sort config by accuracy
     # config = config.sort_values(by="accuracy", ascending=False)
     # pipeline_config = config["pipeline"].iloc[0]
-    pl_interpretable = get_pipeline_from_config(config, scoring)
+    pl_interpretable = get_pipeline_from_config(config, scoring_load)
 
     print(pl_interpretable)
     X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, include_meta_label=True,
@@ -166,7 +170,7 @@ if __name__ == '__main__':
                                         "test_cm_00": test_cm_00, "test_cm_01": test_cm_01, "test_cm_02": test_cm_02,
                                         "test_cm_10": test_cm_10, "test_cm_11": test_cm_11, "test_cm_12": test_cm_12,
                                         "test_cm_20": test_cm_20, "test_cm_21": test_cm_21, "test_cm_22": test_cm_22})
-    save_frame.to_csv(f"results/eye_tracking_{n_classes}_classes/all/metrics_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{tag}_{number_of_repeats}.csv")
+    save_frame.to_csv(f"results/eye_tracking_{n_classes}_classes/all/{scoring}_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{tag}_{number_of_repeats}.csv")
 
 
     if use_shap:

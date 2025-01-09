@@ -1,6 +1,8 @@
 #!/bin/bash
 
-source ~/PycharmProjects/watchplant_classification/venv/bin/activate
+# TODO: make sure the env is properly sourced
+# source ~/PycharmProjects/watchplant_classification/venv/bin/activate
+# source venv/bin/activate
 
 for n_classes in 2 3; do
     for tw in 2 5 10 15 20 30 45 60; do
