@@ -29,17 +29,20 @@ def fit_classifier_parallel(x_analysis, y_analysis, pl_interpretable, use_shap, 
     y_pred = trained.predict(x_validation.values)
     y_pred_proba = trained.predict_proba(x_validation.values)
 
-    # if use_shap:
-    #     explainer = shap.KernelExplainer(trained.predict_proba, shap.sample(x_train.values, 50))
-    #     shap_value = explainer(x_train.iloc[0:33])  # TODO: shouldnt we use x_validation here?
-    #
-    #     # returns probability for class 0 and 1, but we only need one bc p = 1 - p
-    #     shap_value.values = shap_value.values[:, :, 1]
-    #     shap_value.base_values = shap_value.base_values[:, 1]
-    #
-    #     shap_value = shap_value.abs.mean(axis=0).values
+    if use_shap:  # TODO
+        explainer = shap.KernelExplainer(trained.predict_proba, shap.sample(x_train.values, 50))
+        shap_value = explainer(x_train.iloc[0:33])  # TODO: shouldnt we use x_validation here?
 
-    roc = roc_auc_score(y_validation, y_pred_proba[:, 1]) if n_classes == 2 else 0
+        # returns probability for class 0 and 1, but we only need one bc p = 1 - p
+        shap_value.values = shap_value.values[:, :, 1]
+        shap_value.base_values = shap_value.base_values[:, 1]
+
+        shap_value = shap_value.abs.mean(axis=0).values
+
+    # NOTE: ovo and macro insensitive to class inbalance for roc_auc, current solution is sensitive
+    roc = roc_auc_score(y_validation, y_pred_proba[:, 1]) if n_classes == 2 else \
+          roc_auc_score(y_validation, y_pred_proba, multi_class='ovr', average='macro')
+
     return accuracy_score(y_validation, y_pred), roc, \
            f1_score(y_validation, y_pred, average='weighted'), trained, None  # shap_value if use_shap else None
 
@@ -50,9 +53,9 @@ if __name__ == '__main__':
         pd.set_option('display.max_columns', None)
         pd.set_option('display.max_rows', None)
         plt.rcParams.update({'font.size': 22})
-        dir_path="results/without_histgradient"
+        dir_path = "results/without_histgradient"
     elif platform.system() == "Linux":
-        dir_path="results"
+        dir_path = "results"
         matplotlib.use('TkAgg')
 
     # # params to choose
@@ -60,10 +63,11 @@ if __name__ == '__main__':
     tw = int(sys.argv[2])  # time window in seconds
     label = str(sys.argv[4])  # "ppot" or "duration_estimate"
     scoring = str(sys.argv[3])  # "roc_auc"?
-    use_shap = True
+    use_shap = False
     bls = True  # baseline subtraction
     tag = "_bls" if bls else ""
-    number_of_repeats = 5
+    number_of_repeats = 100
+    workers = os.cpu_count()
 
     print(f"setting: {n_classes}, {tw}, {scoring}, {label}")
     config = f"{dir_path}/eye_tracking_{n_classes}_classes/autoML_classifiers/{scoring}_naml_history_tw_{tw}_label_{label}_bls.csv"
@@ -90,9 +94,8 @@ if __name__ == '__main__':
     f1_all = []
     classifier_all = []
     pbar = tqdm(total=number_of_repeats)
-    futures = []
     cv = StratifiedShuffleSplit(n_splits=number_of_repeats)
-    with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
+    with ProcessPoolExecutor(max_workers=workers) as executor:
         futures = [executor.submit(fit_classifier_parallel, x_analysis, y_analysis, pl_interpretable, use_shap, i_train, i_validation, n_classes) for i_train, i_validation in cv.split(x_analysis, y_analysis)]
 
         def _cb(future):
@@ -110,7 +113,6 @@ if __name__ == '__main__':
 
     for i, future in enumerate(futures):
         acc, roc, f1, classifier, shap_value = future.result()
-
         acc_all.append(acc)
         roc_all.append(roc)
         f1_all.append(f1)
@@ -124,23 +126,50 @@ if __name__ == '__main__':
 
     test_accs = []
     test_rocs = []
+    test_cm_00, test_cm_01, test_cm_02 = [], [], []
+    test_cm_10, test_cm_11, test_cm_12 = [], [], []
+    test_cm_20, test_cm_21, test_cm_22 = [], [], []
+
     for c in classifier_all:
-        #if n_classes == 2:
-        test_roc = roc_auc_score(y_test, c.predict_proba(x_test.values)[:, 1]) if n_classes == 2 else 0
+        test_roc = roc_auc_score(y_test, c.predict_proba(x_test.values)[:, 1]) if n_classes == 2 else \
+                   roc_auc_score(y_test, c.predict_proba(x_test.values), multi_class='ovr', average='macro')
         test_rocs.append(test_roc)
-        #print(f"test ROC AUC: {test_roc:.4f}")
         test_acc = accuracy_score(y_test, c.predict(x_test.values))
         test_accs.append(test_acc)
-        #print(f"test accuracy: {test_acc}")
-    #print(f"mean test accuracy: {np.mean(test_accs):.4f} $\pm$ {np.std(test_accs):.4f}")
-    #print(f"mean test ROC AUC: {np.mean(test_rocs):.4f} $\pm$ {np.std(test_rocs):.4f}")
+        # NOTE: confusion matrix depends on number of classes
+        if n_classes == 2:
+            test_cm = confusion_matrix(y_test, c.predict(x_test.values), labels=[0, 1])
+            test_cm_00.append(test_cm[0, 0])
+            test_cm_01.append(test_cm[0, 1])
+            test_cm_10.append(test_cm[1, 0])
+            test_cm_11.append(test_cm[1, 1])
+        else:
+            test_cm = confusion_matrix(y_test, c.predict(x_test.values), labels=[0, 1, 2])
+            test_cm_00.append(test_cm[0, 0])
+            test_cm_01.append(test_cm[0, 1])
+            test_cm_02.append(test_cm[0, 2])
+            test_cm_10.append(test_cm[1, 0])
+            test_cm_11.append(test_cm[1, 1])
+            test_cm_12.append(test_cm[1, 2])
+            test_cm_20.append(test_cm[2, 0])
+            test_cm_21.append(test_cm[2, 1])
+            test_cm_22.append(test_cm[2, 2])
 
-    save_frame = pd.DataFrame(data={"accuracy": acc_all, "roc_auc": roc_all, "f1_score": f1_all, "test_accuracy": test_accs, "test_roc_auc": test_rocs})
-    # save_frame.to_csv(f"results/eye_tracking_{n_classes}_classes/all/metrics_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{tag}_{number_of_repeats}.csv")
+    if n_classes == 2:
+        save_frame = pd.DataFrame(data={"accuracy": acc_all, "roc_auc": roc_all, "f1_score": f1_all,
+                                        "test_accuracy": test_accs, "test_roc_auc": test_rocs,
+                                        "test_cm_00": test_cm_00, "test_cm_01": test_cm_01,
+                                        "test_cm_10": test_cm_10, "test_cm_11": test_cm_11})
+    else:
+        save_frame = pd.DataFrame(data={"accuracy": acc_all, "roc_auc": roc_all, "f1_score": f1_all,
+                                        "test_accuracy": test_accs, "test_roc_auc": test_rocs,
+                                        "test_cm_00": test_cm_00, "test_cm_01": test_cm_01, "test_cm_02": test_cm_02,
+                                        "test_cm_10": test_cm_10, "test_cm_11": test_cm_11, "test_cm_12": test_cm_12,
+                                        "test_cm_20": test_cm_20, "test_cm_21": test_cm_21, "test_cm_22": test_cm_22})
+    save_frame.to_csv(f"results/eye_tracking_{n_classes}_classes/all/metrics_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{tag}_{number_of_repeats}.csv")
 
 
     if use_shap:
-        #
         for clf in classifier_all:
             # explainer = shap.Explainer(clf)
             explainer = shap.KernelExplainer(clf.predict_proba, shap.sample(x_analysis.values, 200))  # x_analysis.values
