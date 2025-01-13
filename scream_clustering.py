@@ -87,7 +87,7 @@ x_bg.fillna(0, inplace=True)  # TODO hack to resolve nans
 
 labels_bg = pd.read_csv(constants.SCREAM_DATA_PATH + f"study{study}_features/labels/{background_block_name}.csv")
 
-# load all features and labels
+# load all_test_data features and labels
 x_all = None
 y_all = None
 

@@ -20,7 +20,7 @@ def leave_one_subject_out_cv(X:pd.DataFrame, y:pd.DataFrame, criterium: str):
     splits : list
         List of tuples with train and test indexes
     """
-    # get all subgroups of the dataset
+    # get all_test_data subgroups of the dataset
     subgroups = y[criterium].unique()
     print(f"individual {criterium}s: {subgroups}")
 

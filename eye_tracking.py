@@ -57,7 +57,7 @@ config = f"{dir_path}/eye_tracking_{n_classes}_classes/autoML_classifiers/{scori
 pl_interpretable = get_pipeline_from_config(config, scoring)
 
 # trained = clone(pl_interpretable).fit(x_analysis.values, y_analysis.values.ravel())
-# NOTE only person does not work at all << 50 % accuracy
+# NOTE only person does not work at all_test_data << 50 % accuracy
 # NOTE with some data of a person it works like a charm
 shap_save_frame = None
 metrics_save_frame = None
