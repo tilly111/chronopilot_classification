@@ -57,7 +57,7 @@ if __name__ == '__main__':
     tag = "_bls" if bls else ""
     number_of_robot = int(sys.argv[5])
     rob_id = 2 * number_of_robot + 1
-    number_of_repeats = 100
+    number_of_repeats = 20
     workers = os.cpu_count()
 
     print(f"setting: {n_classes}, {tw}, {scoring}, {label}")
@@ -76,19 +76,30 @@ if __name__ == '__main__':
                                      tw=tw, label_name=[label], bls=bls)
 
     # check what kind of participants are possible
-    possible_participants = X[X['robot'] == rob_id]['participant'].unique()
-    X = X[X['participant'].isin(possible_participants)]
-    y = y[y['participant'].isin(possible_participants)]
+    possible_participants = y[y['robot'] == rob_id]['participant'].unique()
+    # print(f"X berfore: {X.shape}")
+    # print(f"y berfore: {y.shape}")
+    # # X = X[X['participant'].isin(possible_participants)]
+    # # y = y[y['participant'].isin(possible_participants)]
+    # print(f"X after: {X.shape}")
+    # print(f"y after: {y.shape}")
 
-    splits = leave_one_subject_out_cv(X, y, "robot")
+    train_idx = y[(y["robot"] != rob_id) & (y['participant'].isin(possible_participants))].index
+    test_idx = y[(y["robot"] == rob_id) & (y['participant'].isin(possible_participants))].index
 
-    # print(X.iloc[splits[0][0]]["robot"].unique())
-    # print(X.iloc[splits[0][1]]["robot"].unique())
-    train_idxs = splits[number_of_robot][0]
-    test_idxs = splits[number_of_robot][1]
+    # splits = leave_one_subject_out_cv(X, y, "robot")
+
+    # train_idxs = splits[number_of_robot][0]
+    # test_idxs = splits[number_of_robot][1]
 
     X.drop(columns=["slice", "participant", "time", "robot"], inplace=True)
     y.drop(columns=["participant", "time", "robot"], inplace=True)
+    # print(f"idx {y.iloc[train_idx]}")
+    # exit(123)
+    # print(f"idx {test_idx}")
+    # print(f"train shapes: {X.iloc[train_idx].shape}")
+    # print(f"test shapes: {X.iloc[test_idx].shape}")
+    # print(X.index)
 
     acc_all = []
     roc_all = []
@@ -96,8 +107,14 @@ if __name__ == '__main__':
     classifier_all = []
     pbar = tqdm(total=number_of_repeats)
     # cv = StratifiedShuffleSplit(n_splits=number_of_repeats)
+
+    # for _ in range(number_of_repeats):
+    #     fit_classifier_parallel(X, y, pl_interpretable, train_idx, test_idx, n_classes)
+    #
+    # exit(112)
+
     with ProcessPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(fit_classifier_parallel, X, y, pl_interpretable, train_idxs, test_idxs, n_classes) for _ in range(number_of_repeats)]
+        futures = [executor.submit(fit_classifier_parallel, X, y, pl_interpretable, train_idx, test_idx, n_classes) for _ in range(number_of_repeats)]
 
         def _cb(future):
             pbar.update(1)
