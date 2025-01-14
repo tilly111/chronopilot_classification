@@ -9,7 +9,7 @@ for n_classes in 2 3; do
         for scoring in "accuracy" "roc_auc"; do
             for label in "duration_estimate" "ppot"; do
                 for robot in 0 1 2 3 4 5 6 7; do
-                  python main.py $n_classes $tw $scoring $label $robot
+                  python eye_tracking_robots.py $n_classes $tw $scoring $label $robot
                 done
             done
         done

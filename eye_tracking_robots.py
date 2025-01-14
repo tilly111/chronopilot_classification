@@ -56,6 +56,7 @@ if __name__ == '__main__':
     bls = True  # baseline subtraction
     tag = "_bls" if bls else ""
     number_of_robot = int(sys.argv[5])
+    rob_id = 2 * number_of_robot + 1
     number_of_repeats = 100
     workers = os.cpu_count()
 
@@ -74,13 +75,17 @@ if __name__ == '__main__':
     X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, include_meta_label=True,
                                      tw=tw, label_name=[label], bls=bls)
 
+    # check what kind of participants are possible
+    possible_participants = X[X['robot'] == rob_id]['participant'].unique()
+    X = X[X['participant'].isin(possible_participants)]
+    y = y[y['participant'].isin(possible_participants)]
+
     splits = leave_one_subject_out_cv(X, y, "robot")
 
     # print(X.iloc[splits[0][0]]["robot"].unique())
     # print(X.iloc[splits[0][1]]["robot"].unique())
     train_idxs = splits[number_of_robot][0]
     test_idxs = splits[number_of_robot][1]
-
 
     X.drop(columns=["slice", "participant", "time", "robot"], inplace=True)
     y.drop(columns=["participant", "time", "robot"], inplace=True)
@@ -147,5 +152,5 @@ if __name__ == '__main__':
                                         "test_cm_00": test_cm_00, "test_cm_01": test_cm_01, "test_cm_02": test_cm_02,
                                         "test_cm_10": test_cm_10, "test_cm_11": test_cm_11, "test_cm_12": test_cm_12,
                                         "test_cm_20": test_cm_20, "test_cm_21": test_cm_21, "test_cm_22": test_cm_22})
-    rob_id = 2 * number_of_robot + 1
+
     save_frame.to_csv(f"{dir_path}/eye_tracking_{n_classes}_classes/active_robot/{scoring}_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}{tag}_{rob_id}.csv")
