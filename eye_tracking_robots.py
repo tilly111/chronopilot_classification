@@ -29,9 +29,13 @@ def fit_classifier_parallel(X, y, pl_interpretable, i_train, i_validation, n_cla
     y_pred_proba = trained.predict_proba(x_validation.values)
 
     # NOTE: ovo and macro insensitive to class inbalance for roc_auc, current solution is sensitive
-    roc = roc_auc_score(y_validation, y_pred_proba[:, 1]) if n_classes == 2 else \
-          roc_auc_score(y_validation, y_pred_proba, multi_class='ovr', average='macro')
-    cm = confusion_matrix(y_validation, y_pred)
+    try:
+        roc = roc_auc_score(y_validation, y_pred_proba[:, 1]) if n_classes == 2 else \
+            roc_auc_score(y_validation, y_pred_proba, multi_class='ovr', average='macro')
+    except ValueError:
+        roc = np.nan
+    labels = [0, 1, 2] if n_classes == 3 else [0, 1]
+    cm = confusion_matrix(y_validation, y_pred, labels=labels)
 
     return accuracy_score(y_validation, y_pred), roc, \
            f1_score(y_validation, y_pred, average='weighted'), trained, cm
