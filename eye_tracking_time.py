@@ -1,116 +1,154 @@
+import sys
+
 import pandas as pd
 import numpy as np
 import os
+import platform
+import matplotlib
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from sklearn.base import clone
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, roc_auc_score
 
-from utils.splitting import leave_one_subject_out_cv
 from utils.feature_loader import load_eye_tracking_data_tw
-from utils.learner_pipeline import fit_classifier, get_pipeline_for_features
-from sklearn.model_selection import train_test_split
+from utils.splitting import train_test_split_tw, analysis_test_split_tw, leave_one_subject_out_cv
+from utils.learner_pipeline import fit_classifier, get_pipeline_for_features, fit_classifier_cf, get_pipeline_from_config
+from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
 
-from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
+import matplotlib.pyplot as plt
+
+
+def fit_classifier_parallel(X, y, pl_interpretable, i_train, i_validation, n_classes):
+    x_train = X.iloc[i_train]
+    y_train = y.iloc[i_train]
+    x_validation = X.iloc[i_validation]
+    y_validation = y.iloc[i_validation]
+
+    trained = clone(pl_interpretable).fit(x_train.values, y_train.values.ravel())
+    y_pred = trained.predict(x_validation.values)
+    y_pred_proba = trained.predict_proba(x_validation.values)
+
+    # NOTE: ovo and macro insensitive to class inbalance for roc_auc, current solution is sensitive
+    roc = roc_auc_score(y_validation, y_pred_proba[:, 1]) if n_classes == 2 else \
+          roc_auc_score(y_validation, y_pred_proba, multi_class='ovr', average='macro')
+    cm = confusion_matrix(y_validation, y_pred)
+
+    return accuracy_score(y_validation, y_pred), roc, \
+           f1_score(y_validation, y_pred, average='weighted'), trained, cm
+
 
 if __name__ == '__main__':
-    # params to choose
-    n_classes = 2
-    tw = 20  # time window in seconds
-    label = "ppot"  # "ppot" or "duration_estimate"
-    include_meta_label = True
-    scoring = "accuracy"  # "roc_auc"?
-    m_workers = os.cpu_count()
-    print(f"Utilizing {m_workers} worker(s)...")
-    num_splits = 10
+    if platform.system() == "Darwin":
+        matplotlib.use('QtAgg')
+        pd.set_option('display.max_columns', None)
+        pd.set_option('display.max_rows', None)
+        plt.rcParams.update({'font.size': 22})
+        dir_path = "results/without_histgradient"
+    elif platform.system() == "Linux":
+        dir_path = "results"
+        matplotlib.use('TkAgg')
+
+    # # params to choose
+    n_classes = int(sys.argv[1])
+    tw = int(sys.argv[2])  # time window in seconds
+    label = str(sys.argv[4])  # "ppot" or "duration_estimate"
+    scoring = str(sys.argv[3])  # "roc_auc"?
     bls = True  # baseline subtraction
     tag = "_bls" if bls else ""
+    experimental_time = int(sys.argv[5])
+    exp_time = 2 * experimental_time + 1
+    number_of_repeats = 100
+    workers = os.cpu_count()
 
-    # Load data
-    X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True,
-                                     include_meta_label=include_meta_label, tw=tw, label_name=[label], bls=bls)
+    print(f"setting: {n_classes}, {tw}, {scoring}, {label}")
+    if n_classes == 3 and scoring == 'roc_auc':
+        scoring_load = "accuracy"
+    else:
+        scoring_load = scoring
+    config = f"{dir_path}/eye_tracking_{n_classes}_classes/autoML_classifiers/{scoring_load}_naml_history_tw_{tw}_label_{label}_bls.csv"
 
-    # Leave one subject out cross-validation
-    splits = leave_one_subject_out_cv(X, y, "time")
+    pl_interpretable = get_pipeline_from_config(config, scoring_load)
 
-    # select learner
-    learner = ExtraTreesClassifier(criterion='entropy',
-                                   max_features=0.9197700535609098,
-                                   min_samples_leaf=3, min_samples_split=14,
-                                   n_estimators=512, warm_start=True)
-    preprocessor = None
-    pl_interpretable = get_pipeline_for_features(learner, preprocessor)
+    print(pl_interpretable)
+    X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, include_meta_label=True,
+                                     tw=tw, label_name=[label], bls=bls)
 
-    accuracy_result_frame = pd.DataFrame(columns=["accuracy"] * num_splits)
+    # select a subset of robots to analyze
+    x_analysis = X[X['time'] == exp_time]
+    y_analysis = y[y['time'] == exp_time]
 
-    # fit classifier for each split
-    for _, ind_idx in splits:
+
+    x_analysis.drop(columns=["slice", "participant", "time", "robot"], inplace=True)
+    y_analysis.drop(columns=["participant", "time", "robot"], inplace=True)
+
+    acc_all = []
+    roc_all = []
+    f1_all = []
+    classifier_all = []
+    pbar = tqdm(total=number_of_repeats)
+    cv = StratifiedShuffleSplit(n_splits=number_of_repeats)
+
+    # NOTE: for debugging purposes that you do not have issues with parallelization
+    # for train_idx, test_idx in cv.split(x_analysis, y_analysis):
+    #     fit_classifier_parallel(x_analysis, y_analysis, pl_interpretable, train_idx, test_idx, n_classes)
+    #
+    # exit(112)
+
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(fit_classifier_parallel, x_analysis, y_analysis, pl_interpretable, train_idx, test_idx, n_classes) for train_idx, test_idx in cv.split(x_analysis, y_analysis)]
+
+        def _cb(future):
+            pbar.update(1)
+
+
+        for future in futures:
+            future.add_done_callback(_cb)
+
+        # await results
+        as_completed([f for f in futures])
+
+    # close pbar
+    pbar.close()
+
+    test_cm_00, test_cm_01, test_cm_02 = [], [], []
+    test_cm_10, test_cm_11, test_cm_12 = [], [], []
+    test_cm_20, test_cm_21, test_cm_22 = [], [], []
+
+    for i, future in enumerate(futures):
+        acc, roc, f1, classifier, cm = future.result()
+        acc_all.append(acc)
+        roc_all.append(roc)
+        f1_all.append(f1)
+        classifier_all.append(classifier)
         if n_classes == 2:
-            conf_m_result_frame = pd.DataFrame(columns=["TP", "FN", "FP", "TN"])
+            test_cm_00.append(cm[0, 0])
+            test_cm_01.append(cm[0, 1])
+            test_cm_10.append(cm[1, 0])
+            test_cm_11.append(cm[1, 1])
         else:
-            conf_m_result_frame = pd.DataFrame(columns=["P11", "P12", "P13", "P21", "P22", "P23", "P31", "P32", "P33"])
-        time_duration = int(y.iloc[ind_idx]['time'].unique()[0])
-        # print(f"train: {train_idx}")
-        # print(f"test: {test_idx}")
-        print("\n")
-        print("--------------------------------------------------")
-        # print(f"train on {y.iloc[train_idx]['time'].unique()}")
-        print(f"test on {y.iloc[ind_idx]['time'].unique()}")
-        # print("--------------------------------------------------")
-        # X_train = X.iloc[train_idx].drop(columns=["slice", "slice_fix", "participant", "time", "robot"])
-        X_individual_min = X.iloc[ind_idx].drop(columns=["slice", "participant", "time", "robot"])
-        # y_train = y.iloc[train_idx].drop(columns=["participant", "time", "robot"])
-        y_individual_min = y.iloc[ind_idx].drop(columns=["participant", "time", "robot"])
-
-        # print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
-        # print(X_train.columns)
-        # print(y_train.columns)
-        # print("--------------------------------------------------")
-
-        acc_list = []
-        conf_m_list = []
-        shap_values_list = []
-        futures = []
-        pbar = tqdm(total=num_splits)
-        with ProcessPoolExecutor(max_workers=m_workers) as executor:
-            for seed in range(num_splits):
-                X_train, X_test, y_train, y_test = train_test_split(X_individual_min, y_individual_min,
-                                                                    stratify=y_individual_min, test_size=0.2,
-                                                                    random_state=seed)
-                futures.append(
-                    executor.submit(
-                        fit_classifier, learner, X_train, X_test, y_train, y_test, scoring=scoring, use_shap=False, n_classes=n_classes
-                    )
-                )
+            test_cm_00.append(cm[0, 0])
+            test_cm_01.append(cm[0, 1])
+            test_cm_02.append(cm[0, 2])
+            test_cm_10.append(cm[1, 0])
+            test_cm_11.append(cm[1, 1])
+            test_cm_12.append(cm[1, 2])
+            test_cm_20.append(cm[2, 0])
+            test_cm_21.append(cm[2, 1])
+            test_cm_22.append(cm[2, 2])
 
 
-            def _cb(future):
-                pbar.update(1)
+    #print(f"mean accuracy: {np.mean(acc_all):.4f} $\pm$ {np.std(acc_all):.4f}")  # \u00B1
+    #print(f"mean ROC AUC: {np.mean(roc_all):.4f} $\pm$ {np.std(roc_all):.4f}")
+    #print(f"mean F1-score: {np.mean(f1_all)}")
 
+    if n_classes == 2:
+        save_frame = pd.DataFrame(data={"accuracy": acc_all, "roc_auc": roc_all, "f1_score": f1_all,
+                                        "test_cm_00": test_cm_00, "test_cm_01": test_cm_01,
+                                        "test_cm_10": test_cm_10, "test_cm_11": test_cm_11})
+    else:
+        save_frame = pd.DataFrame(data={"accuracy": acc_all, "roc_auc": roc_all, "f1_score": f1_all,
+                                        "test_cm_00": test_cm_00, "test_cm_01": test_cm_01, "test_cm_02": test_cm_02,
+                                        "test_cm_10": test_cm_10, "test_cm_11": test_cm_11, "test_cm_12": test_cm_12,
+                                        "test_cm_20": test_cm_20, "test_cm_21": test_cm_21, "test_cm_22": test_cm_22})
 
-            for future in futures:
-                future.add_done_callback(_cb)
-
-            as_completed(futures)
-            for future in futures:
-                acc, conf_m_tmp, shap_values = future.result()
-                acc_list.append(acc)
-                if n_classes == 2:
-                    conf_m_result_frame.loc[len(conf_m_result_frame)] = [conf_m_tmp[0, 0], conf_m_tmp[0, 1],
-                                                                         conf_m_tmp[1, 0], conf_m_tmp[1, 1]]
-                else:
-                    conf_m_result_frame.loc[len(conf_m_result_frame)] = [conf_m_tmp[0, 0], conf_m_tmp[1, 0],
-                                                                         conf_m_tmp[2, 0], conf_m_tmp[0, 1],
-                                                                         conf_m_tmp[1, 1], conf_m_tmp[2, 1],
-                                                                         conf_m_tmp[0, 2], conf_m_tmp[1, 2],
-                                                                         conf_m_tmp[2, 2]]
-                shap_values_list.append(shap_values)
-        pbar.close()
-
-        conf_m_result_frame.to_csv(
-            f"results/eye_tracking_{n_classes}_classes/times/confusion_matrix_{label}_tw_{tw}_time_{time_duration}{tag}.csv",
-            index=False)
-
-        accuracy_result_frame.loc[int(y.iloc[ind_idx]['time'].unique()[0])] = acc_list
-
-    accuracy_result_frame.index.name = "time"
-    print(accuracy_result_frame)
-    accuracy_result_frame.to_csv(f"results/eye_tracking_{n_classes}_classes/times/accuracy_{label}_tw_{tw}{tag}.csv")
+    save_frame.to_csv(f"{dir_path}/eye_tracking_{n_classes}_classes/experimental_time/{scoring}_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}{tag}_{exp_time}.csv")
