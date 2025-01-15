@@ -57,7 +57,7 @@ if __name__ == '__main__':
     tag = "_bls" if bls else ""
     number_of_robot = int(sys.argv[5])
     rob_id = 2 * number_of_robot + 1
-    number_of_repeats = 20
+    number_of_repeats = 100
     workers = os.cpu_count()
 
     print(f"setting: {n_classes}, {tw}, {scoring}, {label}")
@@ -66,55 +66,36 @@ if __name__ == '__main__':
     else:
         scoring_load = scoring
     config = f"{dir_path}/eye_tracking_{n_classes}_classes/autoML_classifiers/{scoring_load}_naml_history_tw_{tw}_label_{label}_bls.csv"
-    # sort config by accuracy
-    # config = config.sort_values(by="accuracy", ascending=False)
-    # pipeline_config = config["pipeline"].iloc[0]
+
     pl_interpretable = get_pipeline_from_config(config, scoring_load)
 
     print(pl_interpretable)
     X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, include_meta_label=True,
                                      tw=tw, label_name=[label], bls=bls)
 
-    # check what kind of participants are possible
-    possible_participants = y[y['robot'] == rob_id]['participant'].unique()
-    # print(f"X berfore: {X.shape}")
-    # print(f"y berfore: {y.shape}")
-    # # X = X[X['participant'].isin(possible_participants)]
-    # # y = y[y['participant'].isin(possible_participants)]
-    # print(f"X after: {X.shape}")
-    # print(f"y after: {y.shape}")
+    # select a subset of robots to analyze
+    x_analysis = X[X['robot'] == rob_id]
+    y_analysis = y[y['robot'] == rob_id]
 
-    train_idx = y[(y["robot"] != rob_id) & (y['participant'].isin(possible_participants))].index
-    test_idx = y[(y["robot"] == rob_id) & (y['participant'].isin(possible_participants))].index
 
-    # splits = leave_one_subject_out_cv(X, y, "robot")
-
-    # train_idxs = splits[number_of_robot][0]
-    # test_idxs = splits[number_of_robot][1]
-
-    X.drop(columns=["slice", "participant", "time", "robot"], inplace=True)
-    y.drop(columns=["participant", "time", "robot"], inplace=True)
-    # print(f"idx {y.iloc[train_idx]}")
-    # exit(123)
-    # print(f"idx {test_idx}")
-    # print(f"train shapes: {X.iloc[train_idx].shape}")
-    # print(f"test shapes: {X.iloc[test_idx].shape}")
-    # print(X.index)
+    x_analysis.drop(columns=["slice", "participant", "time", "robot"], inplace=True)
+    y_analysis.drop(columns=["participant", "time", "robot"], inplace=True)
 
     acc_all = []
     roc_all = []
     f1_all = []
     classifier_all = []
     pbar = tqdm(total=number_of_repeats)
-    # cv = StratifiedShuffleSplit(n_splits=number_of_repeats)
+    cv = StratifiedShuffleSplit(n_splits=number_of_repeats)
 
-    # for _ in range(number_of_repeats):
-    #     fit_classifier_parallel(X, y, pl_interpretable, train_idx, test_idx, n_classes)
+    # NOTE: for debugging purposes that you do not have issues with parallelization
+    # for train_idx, test_idx in cv.split(x_analysis, y_analysis):
+    #     fit_classifier_parallel(x_analysis, y_analysis, pl_interpretable, train_idx, test_idx, n_classes)
     #
     # exit(112)
 
     with ProcessPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(fit_classifier_parallel, X, y, pl_interpretable, train_idx, test_idx, n_classes) for _ in range(number_of_repeats)]
+        futures = [executor.submit(fit_classifier_parallel, x_analysis, y_analysis, pl_interpretable, train_idx, test_idx, n_classes) for train_idx, test_idx in cv.split(x_analysis, y_analysis)]
 
         def _cb(future):
             pbar.update(1)
