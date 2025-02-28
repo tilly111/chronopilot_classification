@@ -4,8 +4,6 @@ from sklearn.metrics import confusion_matrix, get_scorer
 import shap
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 
 
 def get_pipeline_for_features(classifier, data_pre_processor, X=None, y=None, feature_list=None):
