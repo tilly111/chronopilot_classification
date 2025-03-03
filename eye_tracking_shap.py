@@ -29,15 +29,15 @@ def fit_classifier_parallel(x_analysis, y_analysis, pl_interpretable, use_shap, 
     y_pred = trained.predict(x_validation.values)
     y_pred_proba = trained.predict_proba(x_validation.values)
 
-    if use_shap:  # TODO
-        explainer = shap.KernelExplainer(trained.predict_proba, shap.sample(x_train.values, 50))
-        shap_value = explainer(x_train.iloc[0:33])  # TODO: shouldnt we use x_validation here?
-
-        # returns probability for class 0 and 1, but we only need one bc q = 1 - p
-        shap_value.values = shap_value.values[:, :, 1]
-        shap_value.base_values = shap_value.base_values[:, 1]
-
-        shap_value = shap_value.abs.mean(axis=0).values
+    # if use_shap:  # TODO
+    #     explainer = shap.KernelExplainer(trained.predict_proba, shap.sample(x_train.values, 50))
+    #     shap_value = explainer(x_train.iloc[0:33])  # TODO: shouldnt we use x_validation here?
+    #
+    #     # returns probability for class 0 and 1, but we only need one bc q = 1 - p
+    #     shap_value.values = shap_value.values[:, :, 1]
+    #     shap_value.base_values = shap_value.base_values[:, 1]
+    #
+    #     shap_value = shap_value.abs.mean(axis=0).values
 
     # NOTE: ovo and macro insensitive to class inbalance for roc_auc, current solution is sensitive
     roc = roc_auc_score(y_validation, y_pred_proba[:, 1]) if n_classes == 2 else \
@@ -63,10 +63,10 @@ if __name__ == '__main__':
     tw = int(sys.argv[2])  # time window in seconds
     label = str(sys.argv[4])  # "ppot" or "duration_estimate"
     scoring = str(sys.argv[3])  # "roc_auc"?
-    use_shap = False
+    use_shap = True
     bls = True  # baseline subtraction
     tag = "_bls" if bls else ""
-    number_of_repeats = 100
+    number_of_repeats = 10  # todo change to 100
     workers = os.cpu_count()
 
     print(f"setting: {n_classes}, {tw}, {scoring}, {label}")
@@ -170,17 +170,18 @@ if __name__ == '__main__':
                                         "test_cm_00": test_cm_00, "test_cm_01": test_cm_01, "test_cm_02": test_cm_02,
                                         "test_cm_10": test_cm_10, "test_cm_11": test_cm_11, "test_cm_12": test_cm_12,
                                         "test_cm_20": test_cm_20, "test_cm_21": test_cm_21, "test_cm_22": test_cm_22})
-    save_frame.to_csv(f"results/eye_tracking_{n_classes}_classes/all/{scoring}_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{tag}_{number_of_repeats}.csv")
+    # save_frame.to_csv(f"results/eye_tracking_{n_classes}_classes/all/{scoring}_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{tag}_{number_of_repeats}.csv")
 
 
     if use_shap:
-        for clf in classifier_all:
-            # explainer = shap.Explainer(clf)
-            explainer = shap.KernelExplainer(clf.predict_proba, shap.sample(x_analysis.values, 200))  # x_analysis.values
-            shap_values = explainer.shap_values(x_test)
-            # shap.summary_plot(shap_values, x_test)
-            shap.summary_plot(shap_values[0], x_test)  # Display the summary_plot of the label “0”.
-            plt.show()
+        clf = classifier_all[np.argmax(test_acc)]
+        # for clf in classifier_all:
+        # explainer = shap.Explainer(clf)
+        explainer = shap.KernelExplainer(clf.predict_proba, shap.sample(x_analysis.values, 200))  # x_analysis.values
+        shap_values = explainer.shap_values(x_analysis)  # TODO Change back x_analysis
+        # shap.summary_plot(shap_values, x_test)
+        shap.plots.beeswarm(shap_values[0], max_display=26)  # Display the summary_plot of the label “0”. # TODO Change back x_analysis
+        plt.show()
         # shap_values = shap_values / number_of_repeats
         # shap_values = shap_values.T
         # shap_values["mean"] = shap_values.mean(axis=1)
