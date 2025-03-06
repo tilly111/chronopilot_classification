@@ -66,7 +66,7 @@ if __name__ == '__main__':
     use_shap = True
     bls = True  # baseline subtraction
     tag = "_bls" if bls else ""
-    number_of_repeats = 10  # todo change to 100
+    number_of_repeats = 1  # todo change to 100
     workers = os.cpu_count()
 
     print(f"setting: {n_classes}, {tw}, {scoring}, {label}")
@@ -175,12 +175,19 @@ if __name__ == '__main__':
 
     if use_shap:
         clf = classifier_all[np.argmax(test_acc)]
+        print(f"best accuracy: {np.max(test_acc)}")
         # for clf in classifier_all:
         # explainer = shap.Explainer(clf)
-        explainer = shap.KernelExplainer(clf.predict_proba, shap.sample(x_analysis.values, 200))  # x_analysis.values
-        shap_values = explainer.shap_values(x_analysis)  # TODO Change back x_analysis
+        explainer = shap.Explainer(clf['learner'], shap.sample(x_analysis, 200))  # x_analysis.values, .predict_proba
+        print(f"features: {x_analysis.shape}")
+        #explainer = shap.TreeExplainer(clf['learner'], x_analysis)
+        # shap_values = explainer.shap_values(shap.sample(x_analysis.values, 5))  # TODO Change back x_analysis
+        shap_values = explainer(x_analysis, check_additivity=False)
+        import pickle
+        with open(f'results/eye_tracking_{n_classes}_classes/shap/shap_values_tw_{tw}_label_{label}_{number_of_repeats}.pickle', 'wb') as f:
+            pickle.dump(shap_values, f)
         # shap.summary_plot(shap_values, x_test)
-        shap.plots.beeswarm(shap_values[0], max_display=26)  # Display the summary_plot of the label “0”. # TODO Change back x_analysis
+        shap.plots.beeswarm(shap_values[:,:,0], max_display=26)  # Display the summary_plot of the label “0”. # TODO Change back x_analysis
         plt.show()
         # shap_values = shap_values / number_of_repeats
         # shap_values = shap_values.T
