@@ -4,10 +4,10 @@ from sklearn.model_selection import train_test_split
 
 n_classes = 3
 slicing = "tw"  # time window = "tw", old slicing after minutes = "minutes", no slicing = None
-tw = 10  # time window in seconds
-label = "duration_estimate"  # "ppot" or "duration_estimate"
-include_meta_label = True  # TODO rerun it
-bls = False  # baseline subtraction
+tw = 1  # time window in seconds
+label = "ppot"  # "ppot" or "duration_estimate"
+include_meta_label = True
+bls = True  # baseline subtraction
 
 if slicing == "minute":
     X, y = load_eye_tracking_data_slice(number_of_classes=n_classes, load_preprocessed=False)

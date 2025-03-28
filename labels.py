@@ -83,24 +83,24 @@ print(f"sahpe of y: {y.shape}")  # 336, 6
 # fig.suptitle("Distribution of PPOT labels\nonly 5 min")
 
 ## check task difficulty
-print(y["task_difficulty"].describe())
-labels = ["very slow", "slow", "medium", "fast", "very fast"]
-_, sizes = np.unique(y["task_difficulty"].values, return_counts=True)
-fig, ax = plt.subplots(1, 1)
-for i in [1, 3, 5]:
-    tmp_x = (y.loc[y["time"] == i]["duration_estimate"].values - i) / y.loc[y["time"] == i]["duration_estimate"].values * 100
-    tmp_y = y.loc[y["time"] == i]["ppot"].values
-    m_x = []
-    for j in range(5):
-        m_x.append(np.mean(tmp_x[tmp_y == j]))
-
-    ax.scatter(tmp_y, tmp_x, alpha=0.5)
-    ax.plot(range(5), m_x, label=f"Time: {i} min", alpha=0.5)
-ax.set_xticks(range(5), labels)
-ax.set_xlabel("PPOT")
-ax.set_ylabel("Relative time estimation [%]")
-ax.hlines(1, 0, 4, colors="r", linestyles="dashed", label="Objective time")
-plt.legend()
+# print(y["task_difficulty"].describe())
+# labels = ["very slow", "slow", "medium", "fast", "very fast"]
+# _, sizes = np.unique(y["task_difficulty"].values, return_counts=True)
+# fig, ax = plt.subplots(1, 1)
+# for i in [1, 3, 5]:
+#     tmp_x = (y.loc[y["time"] == i]["duration_estimate"].values - i) / y.loc[y["time"] == i]["duration_estimate"].values * 100
+#     tmp_y = y.loc[y["time"] == i]["ppot"].values
+#     m_x = []
+#     for j in range(5):
+#         m_x.append(np.mean(tmp_x[tmp_y == j]))
+#
+#     ax.scatter(tmp_y, tmp_x, alpha=0.5)
+#     ax.plot(range(5), m_x, label=f"Time: {i} min", alpha=0.5)
+# ax.set_xticks(range(5), labels)
+# ax.set_xlabel("PPOT")
+# ax.set_ylabel("Relative time estimation [%]")
+# ax.hlines(1, 0, 4, colors="r", linestyles="dashed", label="Objective time")
+# plt.legend()
 # ax[0].pie(sizes, labels=labels, autopct='%1.1f%%')
 # ax[0].title.set_text("Task difficulty distribution")
 

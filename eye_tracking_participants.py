@@ -58,7 +58,7 @@ if __name__ == '__main__':
     bls = True  # baseline subtraction
     tag = "_bls" if bls else ""
     participant_id = int(sys.argv[5])
-    init_length = 0  # in seconds
+    init_length = 30  # in seconds
     number_of_repeats = 100
     workers = os.cpu_count()
 
@@ -175,4 +175,4 @@ if __name__ == '__main__':
                                         "test_cm_10": test_cm_10, "test_cm_11": test_cm_11, "test_cm_12": test_cm_12,
                                         "test_cm_20": test_cm_20, "test_cm_21": test_cm_21, "test_cm_22": test_cm_22})
     save_frame.to_csv(
-        f"results/eye_tracking_{n_classes}_classes/participants/{scoring}_tw_{tw}_label_{label}{tag}_{participant_id}_only_other_participants_for_training.csv")
+        f"results/eye_tracking_{n_classes}_classes/participants/{scoring}_tw_{tw}_label_{label}{tag}_{participant_id}.csv")  # _only_other_participants_for_training

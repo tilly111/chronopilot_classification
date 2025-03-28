@@ -4,6 +4,7 @@ from sklearn.metrics import confusion_matrix, get_scorer
 import shap
 import pandas as pd
 import numpy as np
+import re
 
 
 def get_pipeline_for_features(classifier, data_pre_processor, X=None, y=None, feature_list=None):
@@ -18,27 +19,28 @@ def get_pipeline_for_features(classifier, data_pre_processor, X=None, y=None, fe
     return Pipeline(steps)
 
 
-def get_pipeline_from_config(config: str, scoring: str, X=None, y=None, feature_list=None):
+def get_pipeline_from_config(config: str, scoring: str):
     config = pd.read_csv(config)
     # sort config by accuracy
     config = config.sort_values(by=scoring, ascending=False)
     pipeline_config = config["pipeline"].iloc[0]
+    data_preprocessor_class = config["data-pre-processor_class"].iloc[0] if config["data-pre-processor_class"].iloc[0] is not np.nan else "sklearn.preprocessing._data.MinMaxScaler"
+    feature_preprocessor_class = config["feature-pre-processor_class"].iloc[0] if config["feature-pre-processor_class"].iloc[0] is not np.nan else "sklearn.decomposition._pca.PCA"
+    learner_class = config["learner_class"].iloc[0]
+
+    # in case of select percentile we need to give a function which seems to be buggy
+    pattern = r"<function chi2[^>]*>"
+    pipeline_config = re.sub(pattern, "f_classif", pipeline_config)
     pipeline_config = "from sklearn.pipeline import Pipeline \n" \
-                      "from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier, HistGradientBoostingClassifier \n" \
-                      "from sklearn.neural_network import MLPClassifier \n" \
-                      "from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis \n" \
-                      "from sklearn.svm import SVC \n" \
-                      "from sklearn.tree import DecisionTreeClassifier \n" \
-                      "from sklearn.feature_selection import VarianceThreshold \n" \
-                      "from sklearn.neighbors import KNeighborsClassifier \n" \
-                      "from sklearn.decomposition import PCA \n" \
-                      "from sklearn.preprocessing import OrdinalEncoder, PowerTransformer, QuantileTransformer, MinMaxScaler \n" \
-                      "from sklearn.preprocessing import Normalizer, PolynomialFeatures \n" \
+                      f"from {'.'.join([part for part in data_preprocessor_class.split('.') if not part.startswith('_')][:-1])} import {data_preprocessor_class.split('.')[-1]} \n" \
+                      f"from {'.'.join([part for part in feature_preprocessor_class.split('.') if not part.startswith('_')][:-1])} import {feature_preprocessor_class.split('.')[-1]} \n" \
+                      f"from {'.'.join([part for part in learner_class.split('.') if not part.startswith('_')][:-1])} import {learner_class.split('.')[-1]} \n" \
                       "pipe=" + pipeline_config
     scope = {}
     exec(pipeline_config, scope)
     pipe = scope["pipe"]
     return pipe
+
 
 
 def fit_classifier(learner, x_train, x_test, y_train, y_test, scoring="accuracy", use_shap=False, n_classes=2):

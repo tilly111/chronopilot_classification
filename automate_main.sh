@@ -5,8 +5,8 @@
 # source venv/bin/activate
 
 for n_classes in 2 3; do
-    for tw in 2 5 10 15 20 30 45 60; do
-        for scoring in "accuracy" "roc_auc"; do
+    for tw in 1; do  # 2 5 10 15 20 30 45 60
+        for scoring in "accuracy"; do  # "roc_auc"
             for label in "duration_estimate" "ppot"; do
                 python main.py $n_classes $tw $scoring $label
             done
