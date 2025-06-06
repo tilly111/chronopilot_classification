@@ -6,7 +6,7 @@ import constants
 import matplotlib
 import matplotlib.pyplot as plt
 
-from utils.feature_loader import load_eye_tracking_data
+from utils.feature_loader import load_eye_tracking_data_tw
 
 # for interactive plots
 if platform.system() == "Darwin":
@@ -18,9 +18,31 @@ elif platform.system() == "Linux":
     matplotlib.use('TkAgg')
 
 color_plate = ["#D9D0DE", "#BC8DA0", "#A04668", "#AB4967", "#872424"]  # "#A04668", "#AB4967", "#0C1713"
-_, y = load_eye_tracking_data(number_of_classes=5, load_preprocessed=False, label_name=["duration_estimate", "ppot", "valence", "arousal", "flow", "task_difficulty"], include_meta_label=True)
 
-print(f"sahpe of y: {y.shape}")  # 336, 6
+labels = pd.read_csv("preprocessed_data/eye_tracking_3_classes/y_tw_1_label_arousal_withMetaData_bls.csv")
+
+print(labels.head())
+
+# plt.figure()
+# plt.hist(labels["arousal"])
+# plt.title("Arousal")
+
+print(f"arousal data")
+print(f"og distribution:\n{labels['arousal'].value_counts()}")
+# make binary
+# bin_labels = labels['arousal'].apply(lambda x: 0 if x <= 5 else 1)
+# print(f"binary:\n{bin_labels.value_counts()}")
+# trip_labels = labels['arousal'].apply(lambda x: 0 if x <= 3 else 1 if x <= 7 else 2)
+# print(f"triple:\n{trip_labels.value_counts()}")
+# # print()
+
+# plt.figure()
+# plt.hist(labels["valence"])
+# plt.title("Valence")
+# plt.show()
+# _, y = load_eye_tracking_data_tw(number_of_classes=2, load_preprocessed=False, label_name=["duration_estimate", "ppot", "valence", "arousal", "flow", "task_difficulty"], include_meta_label=True)
+
+# print(f"sahpe of y: {y.shape}")  # 336, 6
 
 ## label distribution and binary distribution
 # labels = ["very slow", "slow", "medium", "fast", "very fast"]
@@ -116,6 +138,6 @@ print(f"sahpe of y: {y.shape}")  # 336, 6
 # TODO correlate task difficulty with ppot
 
 # TODO check distribution with setting?
-plt.show()
+# plt.show()
 
 

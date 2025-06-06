@@ -65,8 +65,13 @@ def train_test_split_tw(X: pd.DataFrame, y: pd.DataFrame, seed: int = 42) -> tup
     """
     if "duration_estimate" in y.columns:
         label = "duration_estimate"
-    else:
+    elif "ppot" in y.columns:
         label = "ppot"
+    elif "arousal" in y.columns:
+        label = "arousal"
+    else:
+        raise ValueError("Label not found in y")
+
     x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed, stratify=y[label])
 
     return x_train, x_test, y_train, y_test

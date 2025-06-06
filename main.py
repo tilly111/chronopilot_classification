@@ -15,6 +15,7 @@ from utils.feature_loader import load_eye_tracking_data_tw
 from utils.splitting import train_test_split_tw, analysis_test_split_tw
 from utils.learner_pipeline import fit_classifier, get_pipeline_for_features, fit_classifier_cf, get_pipeline_from_config
 from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
+import joblib
 
 import matplotlib.pyplot as plt
 
@@ -64,17 +65,19 @@ if __name__ == '__main__':
     label = str(sys.argv[4])  # "ppot" or "duration_estimate"
     scoring = str(sys.argv[3])  # "roc_auc"?
     use_shap = False
-    bls = True  # baseline subtraction
+    bls = False  # baseline subtraction
+    only_pupil = True  # only use pupil data
     tag = "_bls" if bls else ""
+    tag_pupil = "_only_pupil" if only_pupil else ""
     number_of_repeats = 100
     workers = os.cpu_count()
 
-    print(f"setting: {n_classes}, {tw}, {scoring}, {label}")
+    print(f"setting: {n_classes}, {tw}, {scoring}, {label}, {tag_pupil}")
     if n_classes == 3 and scoring == 'roc_auc':
         scoring_load = "accuracy"
     else:
         scoring_load = scoring
-    config = f"{dir_path}/eye_tracking_{n_classes}_classes/autoML_classifiers/{scoring_load}_naml_history_tw_{tw}_label_{label}_bls.csv"
+    config = f"{dir_path}/eye_tracking_{n_classes}_classes/autoML_classifiers/{scoring_load}_naml_history_tw_{tw}_label_{label}{tag}{tag_pupil}.csv"
     # sort config by accuracy
     # config = config.sort_values(by="accuracy", ascending=False)
     # pipeline_config = config["pipeline"].iloc[0]
@@ -82,7 +85,8 @@ if __name__ == '__main__':
 
     print(pl_interpretable)
     X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, include_meta_label=True,
-                                     tw=tw, label_name=[label], bls=bls)
+                                     tw=tw, label_name=[label], bls=bls, only_pupil=only_pupil)
+    
     x_analysis, x_test, y_analysis, y_test = analysis_test_split_tw(X, y)
     x_analysis.drop(columns=["slice", "participant", "time", "robot"], inplace=True)
     y_analysis.drop(columns=["participant", "time", "robot"], inplace=True)
@@ -170,9 +174,14 @@ if __name__ == '__main__':
                                         "test_cm_00": test_cm_00, "test_cm_01": test_cm_01, "test_cm_02": test_cm_02,
                                         "test_cm_10": test_cm_10, "test_cm_11": test_cm_11, "test_cm_12": test_cm_12,
                                         "test_cm_20": test_cm_20, "test_cm_21": test_cm_21, "test_cm_22": test_cm_22})
-    save_frame.to_csv(f"results/eye_tracking_{n_classes}_classes/all/{scoring}_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{tag}_{number_of_repeats}.csv")
-
-
+    save_frame.to_csv(f"results/eye_tracking_{n_classes}_classes/all/{scoring}_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{tag}_{number_of_repeats}{tag_pupil}.csv")
+    
+    # dump best classifier
+    clf = classifier_all[np.argmax(test_accs)]
+    joblib.dump(classifier_all[np.argmax(test_accs)],
+                f"results/models/{scoring}_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{tag}_{number_of_repeats}{tag_pupil}.pkl",
+                compress=1)
+    
     if use_shap:
         for clf in classifier_all:
             # explainer = shap.Explainer(clf)
