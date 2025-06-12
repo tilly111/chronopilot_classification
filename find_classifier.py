@@ -42,7 +42,7 @@ def calc_best_classifier(n_classes, label, tw, scoring, bls, only_pupil):
         return
     print(f"current configuration: {n_classes} classes, {tw} seconds, {label}, {scoring}")
     naml = naiveautoml.NaiveAutoML(max_hpo_iterations=1024, show_progress=True, scoring=scoring,
-                                   max_hpo_iterations_without_imp=100, num_cpus=6, kwargs_as={'excluded_components': {"learner": ["HistGradientBoostingClassifier"]}})  # , kwargs_as={'excluded_components': {"learner": ["HistGradientBoostingClassifier"]}}
+                                   max_hpo_iterations_without_imp=100, num_cpus=20, kwargs_as={'excluded_components': {"learner": ["HistGradientBoostingClassifier"]}})  # , kwargs_as={'excluded_components': {"learner": ["HistGradientBoostingClassifier"]}}
 
     X, y = load_eye_tracking_data_tw(number_of_classes=n_classes, load_preprocessed=True, include_meta_label=True,
                                      tw=tw, label_name=[label], bls=bls, only_pupil=only_pupil)
