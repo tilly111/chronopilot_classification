@@ -45,10 +45,11 @@ def fit_classifier_parallel(x_analysis, y_analysis, pl_interpretable, use_shap, 
           roc_auc_score(y_validation, y_pred_proba, multi_class='ovr', average='macro')
 
     # explicitly delete data so we do not run out of mem
+    acc_scoring = accuracy_score(y_validation, y_pred)
+    f_1_scoring = f1_score(y_validation, y_pred, average='weighted')
     del x_train, x_validation, y_train, y_validation
 
-    return accuracy_score(y_validation, y_pred), roc, \
-           f1_score(y_validation, y_pred, average='weighted'), trained, None  # shap_value if use_shap else None
+    return acc_scoring, roc, f_1_scoring, trained, None  # shap_value if use_shap else None
 
 
 if __name__ == '__main__':
@@ -73,7 +74,7 @@ if __name__ == '__main__':
     tag = "_bls" if bls else ""
     tag_pupil = "_only_pupil" if only_pupil else ""
     number_of_repeats = 100
-    workers = os.cpu_count() - 10 # leave some room for other tasks
+    workers = os.cpu_count() - 2 # leave some room for other tasks
 
     print(f"setting: {n_classes}, {tw}, {scoring}, {label}, {tag_pupil}")
     if n_classes == 3 and scoring == 'roc_auc':
