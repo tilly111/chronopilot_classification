@@ -30,7 +30,7 @@ def fit_classifier_parallel(x_analysis, y_analysis, pl_interpretable, use_shap, 
     y_pred = trained.predict(x_validation.values)
     y_pred_proba = trained.predict_proba(x_validation.values)
 
-    if use_shap:  # TODO
+    if False:  # TODO
         explainer = shap.KernelExplainer(trained.predict_proba, shap.sample(x_train.values, 50))
         shap_value = explainer(x_train.iloc[0:33])  # TODO: shouldnt we use x_validation here?
 
@@ -187,13 +187,15 @@ if __name__ == '__main__':
                 compress=1)
     
     if use_shap:
-        for clf in classifier_all:
-            # explainer = shap.Explainer(clf)
-            explainer = shap.KernelExplainer(clf.predict_proba, shap.sample(x_analysis.values, 200))  # x_analysis.values
-            shap_values = explainer.shap_values(x_test)
-            # shap.summary_plot(shap_values, x_test)
-            shap.summary_plot(shap_values[0], x_test)  # Display the summary_plot of the label “0”.
-            plt.show()
+        # for clf in classifier_all:
+        # explainer = shap.Explainer(clf)
+        explainer = shap.KernelExplainer(clf.predict_proba, shap.sample(x_analysis.values, 200))  # x_analysis.values
+        shap_values = explainer.shap_values(x_test)
+        # shap.summary_plot(shap_values, x_test)
+        shap.summary_plot(shap_values[0], x_test)  # Display the summary_plot of the label “0”.
+        shap_values.to_csv(
+            f"results/eye_tracking_{n_classes}_classes/shap/shap_eye_tracking_{n_classes}_classes_tw_{tw}_label_{label}_{number_of_repeats}{tag_pupil}.csv")
+        plt.show()
         # shap_values = shap_values / number_of_repeats
         # shap_values = shap_values.T
         # shap_values["mean"] = shap_values.mean(axis=1)

@@ -5,6 +5,7 @@ import shap
 import pandas as pd
 import numpy as np
 import re
+from sklearn.compose import ColumnTransformer
 
 
 def get_pipeline_for_features(classifier, data_pre_processor, X=None, y=None, feature_list=None):
@@ -83,3 +84,33 @@ def fit_classifier_cf(learner, x_train, x_test, y_train, y_test, scoring="accura
     # return accuracy_score(y_test, y_pred), confusion_matrix(y_test, y_pred), pl_interpretable
     return scorer(learner_c, x_test.values, y_test), confusion_matrix(y_test, y_pred), shap_values, learner_c
 
+
+def _sklearn_obj_to_str(obj, indent=0):
+    """Recursively expand sklearn objects into a string with no truncation."""
+    pad = " " * indent
+    
+    # Case 1: Pipeline
+    if isinstance(obj, Pipeline):
+        parts = []
+        for name, step in obj.steps:
+            parts.append(f"{pad}  ('{name}', {_sklearn_obj_to_str(step, indent + 4)})")
+        return f"Pipeline(steps=[\n" + ",\n".join(parts) + f"\n{pad}])"
+    
+    # Case 2: ColumnTransformer
+    elif isinstance(obj, ColumnTransformer):
+        parts = []
+        for name, transformer, columns in obj.transformers:
+            parts.append(
+                f"{pad}  ('{name}', {_sklearn_obj_to_str(transformer, indent + 4)}, {columns})"
+            )
+        return f"ColumnTransformer(transformers=[\n" + ",\n".join(parts) + f"\n{pad}])"
+    
+    # Case 3: Base estimator or anything else
+    else:
+        return repr(obj)
+
+
+def pipeline_to_full_str(pl):
+    """Public API: fully expanded string for a pipeline."""
+    pl_str = _sklearn_obj_to_str(pl)
+    return pl_str

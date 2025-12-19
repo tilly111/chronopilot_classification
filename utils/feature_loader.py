@@ -3,72 +3,17 @@ import numpy as np
 import constants
 
 
-def load_scream_data(study=1, block_names=["exp_PU", "exp_MA"], background_block_name="exp_S", use_neurokit=False):
-    if use_neurokit:
-        ppg_features_bg = pd.read_csv(
-            constants.SCREAM_DATA_PATH + f"study{study}_features/{background_block_name}/ppg_nk.csv")
+def load_scream_data(study=1, baseline_subtraction=True):
+    if baseline_subtraction:
+        X = pd.read_csv(f"/Volumes/Data/chronopilot/2024_scream/study{study}/preprocessed_data/baseline_subtraction/X_duration_estimate_2_classes.csv")
+        y = pd.read_csv(f"/Volumes/Data/chronopilot/2024_scream/study{study}/preprocessed_data/baseline_subtraction/y_duration_estimate_2_classes.csv")
     else:
-        ppg_features_bg = pd.read_csv(
-            constants.SCREAM_DATA_PATH + f"study{study}_features/{background_block_name}/ppg.csv")
-    eda_features_bg = pd.read_csv(constants.SCREAM_DATA_PATH + f"study{study}_features/{background_block_name}/eda.csv")
-    tmp_features_bg = pd.read_csv(constants.SCREAM_DATA_PATH + f"study{study}_features/{background_block_name}/tmp.csv")
-    eda_features_bg.drop(columns=["subject"], inplace=True)
-    tmp_features_bg.drop(columns=["subject"], inplace=True)
-    
-    x_bg = pd.concat([ppg_features_bg, eda_features_bg, tmp_features_bg], axis=1).reset_index().drop(columns=["index"])
-    # x_bg = eda_features_bg.reset_index().drop(columns=["index"])
-    x_bg.fillna(0, inplace=True)  # TODO hack to resolve nans
-    
-    labels_bg = pd.read_csv(constants.SCREAM_DATA_PATH + f"study{study}_features/labels/{background_block_name}.csv")
-    
-    # load all_test_data features and labels
-    x_all = None
-    y_all = None
-    
-    # class_counter = 0
-    for block in block_names:
-        labels = pd.read_csv(constants.SCREAM_DATA_PATH + f"study{study}_features/labels/{block}.csv")
-        # labels["block_estimation"] = labels["block_estimation"] - labels_bg["block_estimation"] + 1
-        # labels["block_estimation"] = class_counter
-        # class_counter += 1
-        # if block == "exp_MA":
-        #     labels["block_estimation"] = 0
-        # elif block == "exp_T":  # exp_TU exp_MA
-        #     labels["block_estimation"] = 1
-        # elif block == "exp_TU":
-        #     labels["block_estimation"] = 2
-        # else:
-        #     labels["block_estimation"] = 3
-        # print(block)
+        X = pd.read_csv(
+            f"/Volumes/Data/chronopilot/2024_scream/study{study}/preprocessed_data/no_baseline_subtraction/X_duration_estimate_2_classes.csv")
+        y = pd.read_csv(
+            f"/Volumes/Data/chronopilot/2024_scream/study{study}/preprocessed_data/no_baseline_subtraction/y_duration_estimate_2_classes.csv")
         
-        if use_neurokit:
-            ppg_features = pd.read_csv(constants.SCREAM_DATA_PATH + f"study{study}_features/{block}/ppg_nk.csv")
-        else:
-            ppg_features = pd.read_csv(constants.SCREAM_DATA_PATH + f"study{study}_features/{block}/ppg.csv")
-        eda_features = pd.read_csv(constants.SCREAM_DATA_PATH + f"study{study}_features/{block}/eda.csv")
-        tmp_features = pd.read_csv(constants.SCREAM_DATA_PATH + f"study{study}_features/{block}/tmp.csv")
-        eda_features.drop(columns=["subject"], inplace=True)
-        tmp_features.drop(columns=["subject"], inplace=True)
-        
-        x = pd.concat([ppg_features, eda_features, tmp_features], axis=1).reset_index().drop(columns=["index"])
-        # x = eda_features.reset_index().drop(columns=["index"])
-        x.fillna(0, inplace=True)  # TODO hack to resolve nans
-        
-        # add background subtraction
-        # x.loc[:, x.columns != 'subject'] = x.loc[:, x.columns != 'subject'] - x_bg.loc[:, x_bg.columns != 'subject']
-        x.loc[:, x.columns != 'subject'] = (x.loc[:, x.columns != 'subject'] - x_bg.loc[:,
-                                                                               x_bg.columns != 'subject']) / x_bg.loc[:,
-                                                                                                             x_bg.columns != 'subject']
-        
-        if x_all is None:
-            x_all = x
-            y_all = labels
-        else:
-            x_all = pd.concat([x_all, x], axis=0)
-            y_all = pd.concat([y_all, labels], axis=0)
-    
-    return x_all, y_all
-
+    return X, y
 
 # def load_eye_tracking_data(number_of_classes=2, load_preprocessed=True, label_name=["ppot"],
 #                            include_meta_label=False) -> tuple[pd.DataFrame, pd.DataFrame]:
